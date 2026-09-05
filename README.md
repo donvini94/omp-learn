@@ -8,10 +8,17 @@ reasoning step at a time — checking with a graded question after every step. E
 timestamped Org file that opens in your running Emacs, with LaTeX and diagrams rendered. Every quiz also produces
 a flashcard appended to your Anki Org file.
 
-This is a port of [amosblomqvist/learn](https://github.com/amosblomqvist/learn) (see the author's video,
-[How I Use AI to Learn Things](https://www.youtube.com/watch?v=kzcI5F4tGiU)) from pi to OMP, with Obsidian and
-Markdown replaced by Emacs and Org-roam, tmux replaced by Zellij, and spaced repetition added. See
-[NOTICE.md](NOTICE.md) for what is derived from where.
+## Credit
+
+**The system, the teaching philosophy, and most of what makes this good are not mine.** They come from
+[amosblomqvist/learn](https://github.com/amosblomqvist/learn) by Amos Blomqvist (Eero Alvar), explained in his
+video [How I Use AI to Learn Things](https://www.youtube.com/watch?v=kzcI5F4tGiU). Watch it first — it explains
+*why* the system is shaped this way far better than this README can.
+
+What this repository adds is a port from pi to OMP and a different set of tools around the same idea: Emacs
+Org-mode and Org-roam instead of Obsidian and Markdown, Zellij instead of tmux, Anki flashcards generated from
+the quizzes, and a read boundary around the notes the teacher may look at. The teaching skill itself is his,
+edited. [NOTICE.md](NOTICE.md) lists exactly which files are derived and under what terms.
 
 ---
 
@@ -76,21 +83,13 @@ default when you launch the Emacs application; otherwise `M-x server-start`).
 
 ## Install
 
-While this repository is private (see [NOTICE.md](NOTICE.md)), install it over SSH — you need a GitHub account
-with access and an SSH key on the machine:
-
-```bash
-omp plugin install git+ssh://git@github.com/donvini94/omp-learn.git
-```
-
-If it is ever made public, the shorter form works too:
-
 ```bash
 omp plugin install github:donvini94/omp-learn
 ```
 
 That downloads the package and its dependencies. To update later, run the same command again. To remove it:
-`omp plugin uninstall omp-learn-org`.
+`omp plugin uninstall omp-learn-org`. (SSH works too, if you prefer it:
+`omp plugin install git+ssh://git@github.com/donvini94/omp-learn.git`.)
 
 Then create your workspace — start `omp` anywhere and run:
 

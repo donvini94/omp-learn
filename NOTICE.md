@@ -14,17 +14,17 @@ Files in this repository that started there and were modified:
 - `extensions/visual-tools/**`
 - `agents/researcher.md`, `agents/mermaid-maker.md`, `agents/svg-maker.md`
 
-**That repository publishes no LICENSE file.** Under default copyright, that means no redistribution rights have
-been granted, so this repository must not be made public — or forked, mirrored, or handed to other people — until
-one of the following is true:
+Files deleted from the upstream set during the port: `extensions/ask-user-question.ts` (replaced by OMP's native
+`ask` tool) and `extensions/md-log.ts` (replaced by the Org logger in `src/notebook.ts`).
 
-1. upstream adds a licence permitting redistribution (asking is a one-line issue), or
-2. the derived files above are removed or rewritten from scratch.
+**That repository publishes no LICENSE file**, so no redistribution rights have been granted in writing. This
+port is published anyway, publicly and with attribution, on the understanding that the original was shared
+publicly as a system for others to adopt. If Amos Blomqvist objects, this repository comes down or the derived
+files are removed on request — open an issue or contact the maintainer.
 
-Until then, keep this repository **private** and treat it as a personal port.
+If you are reading this because you want to reuse the derived files yourself: ask upstream first. The MIT grant
+in [LICENSE](LICENSE) covers only the original work in section 3.
 
-Files that were deleted from the upstream set during the port: `extensions/ask-user-question.ts` (replaced by
-OMP's native `ask`) and `extensions/md-log.ts` (replaced by the Org logger in `src/notebook.ts`).
 
 ## 2. Depends on `HazAT/pi-interactive-subagents`
 
