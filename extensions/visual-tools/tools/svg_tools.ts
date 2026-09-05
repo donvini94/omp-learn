@@ -5,22 +5,20 @@
  *   write_svg   — write the full SVG source to the session's file
  *   edit_svg    — exact-match old_text→new_text on that file (pi-edit semantics)
  *   render_svg  — render whatever is in the file → PNG, returned inline; with
- *                 `save_as`, also publish it into <cwd>/viz
+ *                 `save_as`, also publish it into <learningDir>/viz
  *
- * Bundled inside the visual-tools extension and exposed to subagents via the
- * interactive-subagents `registerToolExtension` hook (see ../index.ts). Loaded
- * by the spawned child pi process for any subagent whose `tools:` frontmatter
- * includes these names (currently just svg-maker). All three names map to this
- * one file.
+ * Registered directly by ../index.ts's default export alongside
+ * mermaid_tools.ts — both trios are plain pi tools on the host extension, not
+ * routed through any global interactive-subagents registry.
  *
  * Rendering shells out to rsvg-convert (librsvg — good system-font handling),
  * falling back to ImageMagick's `magick` if rsvg-convert is absent. Both are
  * system binaries; no node render deps. Module-level session state persists
- * across this child process's tool calls, isolated from any parallel maker.
+ * across this process's tool calls.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { Type } from "@sinclair/typebox"
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+import type { LearnConfig } from "../../../src/config.ts"
 import {
   applyEdit,
   existsSync,
@@ -31,6 +29,7 @@ import {
   run,
   type Session,
   snippetAround,
+  vizDir,
   writeBody,
   writeFileSync,
 } from "./_common.ts"
@@ -60,7 +59,8 @@ async function renderSvg(svgPath: string, outPath: string, workDir: string) {
   return { ok: false as const, res: res.code !== null ? res : magick }
 }
 
-export default function svgToolsExtension(pi: ExtensionAPI) {
+export default function svgToolsExtension(pi: ExtensionAPI, config: LearnConfig) {
+  const Type = pi.typebox.Type
   // ── write_svg ──────────────────────────────────────────────────────────────
   pi.registerTool({
     name: "write_svg",
@@ -131,7 +131,7 @@ export default function svgToolsExtension(pi: ExtensionAPI) {
       "from the managed file; call write_svg first.\n\n" +
       "Iterate freely with no `save_as` (preview only). When the picture is " +
       "correct and clean, call once more with `save_as` set to a short kebab-case " +
-      "topic slug: that publishes the PNG into <cwd>/viz with a unique " +
+      "topic slug: that publishes the PNG into <learningDir>/viz with a unique " +
       "filename and returns the filename to embed. On a render error this returns " +
       "the error text instead of an image — fix with edit_svg and re-render.",
     parameters: Type.Object({
@@ -139,7 +139,7 @@ export default function svgToolsExtension(pi: ExtensionAPI) {
         Type.String({
           description:
             "Short kebab-case topic slug (e.g. 'number-line'). When set, the " +
-            "rendered PNG is published to <cwd>/viz as viz-<slug>-<timestamp>.png " +
+            "rendered PNG is published to <learningDir>/viz as viz-<slug>-<timestamp>.png " +
             "and the filename is returned. Omit for a preview-only render.",
         }),
       ),
@@ -172,7 +172,7 @@ export default function svgToolsExtension(pi: ExtensionAPI) {
       const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = []
 
       if (params.save_as) {
-        const { filename, path } = publish(outPath, String(params.save_as))
+        const { filename, path } = publish(outPath, String(params.save_as), vizDir(config))
         content.push({
           type: "text",
           text: `Published to viz/.\nfilename: ${filename}\npath: ${path}\n\nLOOK at the picture below to confirm the geometry is correct before returning it.`,

@@ -16,3 +16,7 @@ __pycache__/
 # Runtime state
 .memory/
 *.log
+
+# Generated lesson artifacts (never inside the package itself, but keep clones clean)
+viz/
+.omp-learn/

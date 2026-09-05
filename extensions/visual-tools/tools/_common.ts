@@ -2,7 +2,7 @@
  * Shared helpers for the visual-tools authoring loops (mermaid_tools.ts,
  * svg_tools.ts): a subprocess runner, a per-session managed source file, an
  * exact-match editor (pi-edit semantics), and publishing a chosen render into
- * <cwd>/viz with a unique filename.
+ * <learningDir>/viz with a unique filename.
  *
  * Each tool file keeps its OWN session state (importing the type/helpers here),
  * so mermaid and svg never share a source file.
@@ -12,6 +12,7 @@ import { spawn } from "node:child_process"
 import { tmpdir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import type { LearnConfig } from "../../../src/config.ts"
 
 // rsvg-convert lives under MacPorts (/opt/local/bin); magick/gs under
 // /usr/local/bin; Homebrew under /opt/homebrew/bin. Augment PATH so the child
@@ -19,16 +20,17 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 export const EXTRA_PATH = ["/opt/local/bin", "/usr/local/bin", "/opt/homebrew/bin"]
 
 // Transient session/preview files live under the OS temp dir (NOT the vault),
-// so only the PUBLISHED PNG ever lands inside the Obsidian vault (viz/).
+// so only the PUBLISHED PNG ever lands inside the learning directory (viz/).
 export const STAGING_ROOT = join(tmpdir(), "pi-visual-tools")
-export const FILES_DIRNAME = "viz"
 
 export const CHROME_CANDIDATES = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ]
 
-export function findChrome(): string | undefined {
+/** Chosen Chrome/Chromium binary: config.browserExecutable when set and present, else a known candidate. */
+export function findChrome(config?: Pick<LearnConfig, "browserExecutable">): string | undefined {
+  if (config?.browserExecutable && existsSync(config.browserExecutable)) return config.browserExecutable
   for (const c of CHROME_CANDIDATES) if (existsSync(c)) return c
   return undefined
 }
@@ -130,9 +132,13 @@ export function snippetAround(content: string, index: number, contextLines = 3):
   return out.join("\n")
 }
 
-/** Copy a rendered PNG into <cwd>/viz with a unique, slugified name. */
-export function publish(pngPath: string, slug: string): { filename: string; path: string } {
-  const filesDir = join(process.cwd(), FILES_DIRNAME)
+/** Directory under the learning dir that published renders publish into. */
+export function vizDir(config: Pick<LearnConfig, "learningDir">): string {
+  return join(config.learningDir, "viz")
+}
+
+/** Copy a rendered PNG into <learningDir>/viz with a unique, slugified name. */
+export function publish(pngPath: string, slug: string, filesDir: string): { filename: string; path: string } {
   mkdirSync(filesDir, { recursive: true })
   const clean =
     slug

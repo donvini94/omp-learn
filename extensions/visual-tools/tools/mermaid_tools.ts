@@ -5,23 +5,22 @@
  *   write_mermaid   — write the full Mermaid source to the session's file
  *   edit_mermaid    — exact-match old_text→new_text on that file (pi-edit semantics)
  *   render_mermaid  — render whatever is in the file → PNG, returned inline;
- *                     with `save_as`, also publish it into <cwd>/viz
+ *                     with `save_as`, also publish it into <learningDir>/viz
  *
- * Bundled inside the visual-tools extension and exposed to subagents via the
- * interactive-subagents `registerToolExtension` hook (see ../index.ts). NOT a
- * global pi extension — loaded by the spawned child pi process for any subagent
- * whose `tools:` frontmatter includes these names (currently just
- * mermaid-maker). All three names map to this one file.
+ * Registered directly by ../index.ts's default export alongside svg_tools.ts —
+ * both trios are plain pi tools on the host extension, not routed through any
+ * global interactive-subagents registry.
  *
- * Rendering shells out to the bundled @mermaid-js/mermaid-cli (`mmdc`) with a
- * puppeteer config pointing at an installed Chrome, so no Chromium download is
- * needed. Module-level session state persists across this child process's tool
- * calls and is naturally isolated from any parallel maker (different process).
+ * Rendering shells out to the root project's @mermaid-js/mermaid-cli (`mmdc`,
+ * resolved from the repo root node_modules/.bin) with a puppeteer config
+ * pointing at config.browserExecutable or an installed Chrome, so no Chromium
+ * download is needed. Module-level session state persists across this
+ * process's tool calls.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { Type } from "@sinclair/typebox"
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
 import { fileURLToPath } from "node:url"
+import type { LearnConfig } from "../../../src/config.ts"
 import {
   applyEdit,
   dirname,
@@ -34,13 +33,18 @@ import {
   run,
   type Session,
   snippetAround,
+  vizDir,
   writeBody,
   writeFileSync,
 } from "./_common.ts"
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
 const EXTENSION_DIR = dirname(TOOL_DIR)
-const MMDC_BIN = join(EXTENSION_DIR, "node_modules", ".bin", "mmdc")
+const ROOT_DIR = dirname(dirname(EXTENSION_DIR))
+const ROOT_MMDC_BIN = join(ROOT_DIR, "node_modules", ".bin", "mmdc")
+// Prefer the root-installed mmdc; fall back to a bare command name resolved
+// via PATH if the repo layout ever moves this extension elsewhere.
+const MMDC_BIN = existsSync(ROOT_MMDC_BIN) ? ROOT_MMDC_BIN : "mmdc"
 const GROUP = "mermaid"
 const BODY_FILE = "diagram.mmd"
 const RENDER_TIMEOUT_MS = 120_000
@@ -49,7 +53,8 @@ type RenderDetails = { ok: boolean; path: string; filename?: string }
 
 let session: Session | null = null
 
-export default function mermaidToolsExtension(pi: ExtensionAPI) {
+export default function mermaidToolsExtension(pi: ExtensionAPI, config: LearnConfig) {
+  const Type = pi.typebox.Type
   // ── write_mermaid ──────────────────────────────────────────────────────────
   pi.registerTool({
     name: "write_mermaid",
@@ -124,7 +129,7 @@ export default function mermaidToolsExtension(pi: ExtensionAPI) {
       "comes from the managed file; call write_mermaid first.\n\n" +
       "Iterate freely with no `save_as` (preview only). When the diagram is " +
       "correct and clean, call once more with `save_as` set to a short kebab-case " +
-      "topic slug: that publishes the PNG into <cwd>/viz with a unique " +
+      "topic slug: that publishes the PNG into <learningDir>/viz with a unique " +
       "filename and returns the filename to embed. On a render error this returns " +
       "the error text instead of an image — fix with edit_mermaid and re-render.",
     parameters: Type.Object({
@@ -132,7 +137,7 @@ export default function mermaidToolsExtension(pi: ExtensionAPI) {
         Type.String({
           description:
             "Short kebab-case topic slug (e.g. 'internet-packets'). When set, the " +
-            "rendered PNG is published to <cwd>/viz as viz-<slug>-<timestamp>.png " +
+            "rendered PNG is published to <learningDir>/viz as viz-<slug>-<timestamp>.png " +
             "and the filename is returned. Omit for a preview-only render.",
         }),
       ),
@@ -144,7 +149,7 @@ export default function mermaidToolsExtension(pi: ExtensionAPI) {
       const { workDir, bodyPath } = session
       mkdirSync(workDir, { recursive: true })
 
-      const chrome = findChrome()
+      const chrome = findChrome(config)
       const cfgPath = join(workDir, "puppeteer.json")
       writeFileSync(
         cfgPath,
@@ -177,7 +182,7 @@ export default function mermaidToolsExtension(pi: ExtensionAPI) {
       const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = []
 
       if (params.save_as) {
-        const { filename, path } = publish(outPath, String(params.save_as))
+        const { filename, path } = publish(outPath, String(params.save_as), vizDir(config))
         content.push({
           type: "text",
           text: `Published to viz/.\nfilename: ${filename}\npath: ${path}\n\nLOOK at the diagram below to confirm it is correct before returning it.`,

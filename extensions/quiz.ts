@@ -1,20 +1,18 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { getEditorTheme, type ExtensionAPI, type ExtensionContext, type Theme, type ThemeColor } from "@oh-my-pi/pi-coding-agent";
 import {
 	Editor,
-	type EditorTheme,
 	Key,
 	Text,
 	matchesKey,
 	truncateToWidth,
 	wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+} from "@oh-my-pi/pi-tui";
 
 // ────────────────────────────────────────────────────────────────────────────
-// quiz — a GRADED sibling of ask_user_question.
+// quiz — a graded question alongside OMP's native ask tool.
 //
-// Where ask_user_question collects a preference/decision with no notion of
-// right or wrong, `quiz` poses a question that HAS a correct answer, grades the
+// Native ask collects a preference or decision without grading.
+// The quiz poses a question with a correct answer, grades the
 // user's selection instantly, and shows tight feedback (✓/✗ + the correct
 // answer + an optional explanation) to both the user and the agent.
 //
@@ -66,6 +64,12 @@ interface DisplayedOption {
 	label: string;
 }
 
+interface RecallInfo {
+	question: string;
+	answer: string;
+	sources?: string[];
+}
+
 interface QuizResultDetails {
 	status: QuizStatus;
 	question: string;
@@ -79,46 +83,11 @@ interface QuizResultDetails {
 	note?: string; // optional free-text from the always-present note field (any answer)
 	explanation?: string;
 	message?: string;
+	// Recall card echoed from params.recall — populated ONLY on the final
+	// "answered" result, never on cancelled/unavailable results, the
+	// pre-answer onUpdate emission, or renderCall (would leak the answer).
+	recall?: RecallInfo;
 }
-
-const OptionSchema = Type.Object({
-	label: Type.String({ description: "Display label for the answer option." }),
-	value: Type.Optional(
-		Type.String({ description: "Optional machine-readable value returned for the option. Defaults to the label." }),
-	),
-	description: Type.Optional(Type.String({ description: "Optional extra detail shown below the option." })),
-});
-
-const QuizParams = Type.Object({
-	question: Type.String({
-		description: "The single quiz question to ask. Ask exactly one question per tool call.",
-	}),
-	details: Type.Optional(
-		Type.String({ description: "Optional extra context or instructions shown under the question." }),
-	),
-	options: Type.Array(OptionSchema, {
-		description:
-			"The answer options (2 or more). Options only — there is no free-text mode. Give each option a stable `value`; you reference the correct one by that value in correctAnswer.",
-		minItems: 2,
-	}),
-	multiSelect: Type.Optional(
-		Type.Boolean({ description: "Set to true when more than one option is correct and the user must select all of them." }),
-	),
-	correctAnswer: Type.Union([Type.String(), Type.Array(Type.String())], {
-		description:
-			'REQUIRED. The correct answer as the option value(s) — the `value` field of the option you intend. Single-select: a single string (e.g. "mercury"). Multi-select: an array of strings (e.g. ["belize", "niue"]); the user is only correct if their selection matches this set exactly. Always pass the value, not a position number — this is self-checking and prevents miscounting.',
-	}),
-	explanation: Type.String({
-		description:
-			"REQUIRED. Explanation revealed AFTER the user answers (shown whether they got it right or wrong). Use it to reinforce why the correct answer is correct.",
-	}),
-	shuffle: Type.Optional(
-		Type.Boolean({
-			description:
-				"Defaults to true: options are randomly reordered before display so the correct answer isn't always in the same position. Set to false only when option order is meaningful (e.g. ordered numeric values, or an 'All/None of the above' option that must stay last).",
-		}),
-	),
-});
 
 function normalizeOptions(
 	options: Array<{ label: string; value?: string; description?: string }> | undefined,
@@ -194,18 +163,6 @@ function resolveCorrect(
 	return { indices: Array.from(new Set(indices)).sort((a, b) => a - b) };
 }
 
-function createEditorTheme(theme: any): EditorTheme {
-	return {
-		borderColor: (s) => theme.fg("accent", s),
-		selectList: {
-			selectedPrefix: (t) => theme.fg("accent", t),
-			selectedText: (t) => theme.fg("accent", t),
-			description: (t) => theme.fg("muted", t),
-			scrollInfo: (t) => theme.fg("dim", t),
-			noMatch: (t) => theme.fg("warning", t),
-		},
-	};
-}
 
 function addWrapped(lines: string[], text: string, width: number, indent = ""): void {
 	const contentWidth = Math.max(1, width - indent.length);
@@ -234,8 +191,9 @@ function buildStructuredResult(
 	options?: DisplayedOption[],
 	dontKnow?: boolean,
 	note?: string,
+	recall?: RecallInfo,
 ): QuizResultDetails {
-	return { status, question, context, mode, answers, correctIndices, options, correct, dontKnow, note, explanation, message };
+	return { status, question, context, mode, answers, correctIndices, options, correct, dontKnow, note, explanation, message, recall };
 }
 
 function cancelledResult(question: string, mode: QuizMode, correctIndices: number[], context?: string) {
@@ -266,6 +224,7 @@ function buildResult(
 	response: QuizResponse,
 	correctIndices: number[],
 	explanation: string | undefined,
+	recall: RecallInfo,
 ) {
 	const { dontKnow, note, answers } = response;
 	const selectedIndices = answers.map((a) => a.index);
@@ -304,6 +263,7 @@ function buildResult(
 			displayedOptions,
 			dontKnow,
 			note,
+			recall,
 		),
 	};
 }
@@ -311,7 +271,7 @@ function buildResult(
 // Shared feedback block, rendered after the user submits.
 function renderFeedback(
 	lines: string[],
-	theme: any,
+	theme: Theme,
 	width: number,
 	options: QuizOption[],
 	selectedIndices: number[],
@@ -332,7 +292,7 @@ function renderFeedback(
 		const isSelected = selectedSet.has(index);
 		const isKey = correctSet.has(index);
 		let marker: string;
-		let color: string;
+		let color: ThemeColor;
 		if (dontKnow) {
 			// No guess was made — only reveal the correct answer(s); never show ✗.
 			marker = isKey ? "✓" : " ";
@@ -378,7 +338,7 @@ function renderFeedback(
 }
 
 // Top border + question + optional context. Shared by both components.
-function pushHeader(lines: string[], theme: any, width: number, question: string, context: string | undefined): void {
+function pushHeader(lines: string[], theme: Theme, width: number, question: string, context: string | undefined): void {
 	lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
 	addWrapped(lines, theme.fg("text", question), width, " ");
 	if (context) {
@@ -389,7 +349,7 @@ function pushHeader(lines: string[], theme: any, width: number, question: string
 
 // The "I don't know" row in the selection list — visually separated and dimmed
 // so it reads as distinct from the real, gradable options.
-function pushDontKnowRow(lines: string[], theme: any, width: number, focused: boolean): void {
+function pushDontKnowRow(lines: string[], theme: Theme, width: number, focused: boolean): void {
 	lines.push("");
 	const prefix = focused ? theme.fg("accent", "> ") : "  ";
 	const styled = focused ? theme.fg("accent", DONT_KNOW_LABEL) : theme.fg("dim", DONT_KNOW_LABEL);
@@ -399,7 +359,7 @@ function pushDontKnowRow(lines: string[], theme: any, width: number, focused: bo
 // Persistent, always-present note field rendered under the options during the
 // select phase. Applies to ANY answer (including "I don't know") and is only
 // surfaced to the agent when non-empty.
-function pushNoteField(lines: string[], theme: any, width: number, editor: Editor, focused: boolean): void {
+function pushNoteField(lines: string[], theme: Theme, width: number, editor: Editor, focused: boolean): void {
 	lines.push("");
 	const label = focused ? theme.fg("accent", "Note (optional):") : theme.fg("muted", "Note (optional):");
 	addWrapped(lines, label, width, " ");
@@ -411,15 +371,15 @@ function pushNoteField(lines: string[], theme: any, width: number, editor: Edito
 // Instead the host intercepts Enter to return focus to the options while
 // keeping the text. Ctrl+J still inserts a newline (pi convention), so
 // multi-line notes work.
-function makeNoteEditor(tui: any, theme: any): Editor {
-	const editor = new Editor(tui, createEditorTheme(theme));
+function makeNoteEditor(): Editor {
+	const editor = new Editor(getEditorTheme());
 	editor.focused = false;
 	editor.disableSubmit = true;
 	return editor;
 }
 
 async function askSingleChoice(
-	ctx: any,
+	ctx: ExtensionContext,
 	question: string,
 	context: string | undefined,
 	options: QuizOption[],
@@ -434,13 +394,13 @@ async function askSingleChoice(
 	const dontKnowNav = allOptions.length; // nav index of the "I don't know" row
 
 	return ctx.ui.custom<QuizResponse | null>(
-		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
+		(tui, theme, _kb, done) => {
 			let optionIndex = 0;
 			let phase: "select" | "feedback" = "select";
 			let focus: "options" | "note" = "options";
 			let chosen: OptionAnswer | null = null;
 			let dontKnow = false;
-			const editor = makeNoteEditor(tui, theme);
+			const editor = makeNoteEditor();
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 
@@ -599,7 +559,7 @@ async function askSingleChoice(
 }
 
 async function askMultiChoice(
-	ctx: any,
+	ctx: ExtensionContext,
 	question: string,
 	context: string | undefined,
 	options: QuizOption[],
@@ -622,11 +582,11 @@ async function askMultiChoice(
 	const allItems: DisplayOption[] = [...choiceItems, dontKnowItem, submitItem];
 
 	return ctx.ui.custom<QuizResponse | null>(
-		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
+		(tui, theme, _kb, done) => {
 			let optionIndex = 0;
 			let phase: "select" | "feedback" = "select";
 			let focus: "options" | "note" = "options";
-			const editor = makeNoteEditor(tui, theme);
+			const editor = makeNoteEditor();
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 			const selected = new Map<string, OptionAnswer>();
@@ -846,58 +806,66 @@ function sortAnswers(answers: OptionAnswer[]): OptionAnswer[] {
 	return [...answers].sort((a, b) => a.index - b.index);
 }
 
-// Shared UI mutex. ctx.ui.custom()/editor can only handle one active call at
-// a time, so ALL pop-up-style tools (quiz, ask_user_question, ...) must
-// serialize against each other, not just against themselves. We stash one
-// mutex on globalThis so separate extension files can share it without
-// importing each other.
-const SHARED_UI_LOCK_KEY = "__piSharedUiLock";
-function getSharedUiLock() {
-	const g = globalThis as any;
-	if (!g[SHARED_UI_LOCK_KEY]) {
-		let chain: Promise<void> = Promise.resolve();
-		g[SHARED_UI_LOCK_KEY] = {
-			withLock<T>(fn: () => T | Promise<T>): Promise<T> {
-				const prev = chain;
-				let release: () => void;
-				chain = new Promise<void>((r) => { release = r; });
-				return prev.then(fn).finally(() => release!());
-			},
-		};
-	}
-	return g[SHARED_UI_LOCK_KEY] as { withLock<T>(fn: () => T | Promise<T>): Promise<T> };
-}
-const sharedUiLock = getSharedUiLock();
-
-function withUILock<T>(fn: () => Promise<T>): Promise<T> {
-	return sharedUiLock.withLock(fn);
-}
 
 export default function quiz(pi: ExtensionAPI) {
+	const Type = pi.typebox.Type;
+	// Native ask is exclusive in OMP's tool scheduler. Serialize concurrent
+	// quiz calls here because custom extension tools otherwise run shared.
+	let uiQueue: Promise<void> = Promise.resolve();
+
+	const OptionSchema = Type.Object({
+		label: Type.String({ description: "Display label for the answer option." }),
+		value: Type.Optional(
+			Type.String({ description: "Optional machine-readable value returned for the option. Defaults to the label." }),
+		),
+		description: Type.Optional(Type.String({ description: "Optional extra detail shown below the option." })),
+	});
+
+	const RecallSchema = Type.Object({
+		question: Type.String({ description: "The retrieval-practice prompt to store as an Anki card front." }),
+		answer: Type.String({ description: "The answer to store as an Anki card back. Never surfaced before the user responds." }),
+		sources: Type.Optional(
+			Type.Array(Type.String(), { description: "Optional source references (file paths, URLs, note ids) backing this recall card." }),
+		),
+	});
+
+	const QuizParams = Type.Object({
+		question: Type.String({
+			description: "The single quiz question to ask. Ask exactly one question per tool call.",
+		}),
+		details: Type.Optional(
+			Type.String({ description: "Optional extra context or instructions shown under the question." }),
+		),
+		options: Type.Array(OptionSchema, {
+			description:
+				"The answer options (2 or more). Options only — there is no free-text mode. Give each option a stable `value`; you reference the correct one by that value in correctAnswer.",
+			minItems: 2,
+		}),
+		multiSelect: Type.Optional(
+			Type.Boolean({ description: "Set to true when more than one option is correct and the user must select all of them." }),
+		),
+		correctAnswer: Type.Union([Type.String(), Type.Array(Type.String())], {
+			description:
+				'REQUIRED. The correct answer as the option value(s) — the `value` field of the option you intend. Single-select: a single string (e.g. "mercury"). Multi-select: an array of strings (e.g. ["belize", "niue"]); the user is only correct if their selection matches this set exactly. Always pass the value, not a position number — this is self-checking and prevents miscounting.',
+		}),
+		explanation: Type.String({
+			description:
+				"REQUIRED. Explanation revealed AFTER the user answers (shown whether they got it right or wrong). Use it to reinforce why the correct answer is correct.",
+		}),
+		shuffle: Type.Optional(
+			Type.Boolean({
+				description:
+					"Defaults to true: options are randomly reordered before display so the correct answer isn't always in the same position. Set to false only when option order is meaningful (e.g. ordered numeric values, or an 'All/None of the above' option that must stay last).",
+			}),
+		),
+		recall: RecallSchema,
+	});
+
 	pi.registerTool({
 		name: "quiz",
 		label: "quiz",
 		description:
-			"Ask the user a GRADED question with a known correct answer, then instantly grade and give feedback. Unlike ask_user_question (which collects preferences/decisions with no right answer), quiz always has a correct answer supplied by you, marks the user's selection right/wrong (✓/✗), reveals the correct answer, and can show an explanation. Use it to (1) assess what the learner already understands before teaching, and (2) run tight practice/retrieval loops after explaining, or probe understanding whenever you're unsure they've got it. Options-only: single-select or multi-select, plus an automatic 'I don't know' choice so the user can signal a genuine gap instead of guessing. An always-present optional note field (Tab to focus it) lets the user attach a free-text note to ANY answer; it reaches you only when non-empty. No free-text answers — for non-graded questions use ask_user_question instead.",
-		promptSnippet:
-			"Use the quiz tool to test the user with a graded multiple-choice or multi-select question (required correct answer + required explanation). For non-graded questions, use ask_user_question.",
-		promptGuidelines: [
-			"quiz is GRADED; ask_user_question is not. If the question has a correct answer, use quiz. If you just need a preference, decision, or open-ended input, use ask_user_question.",
-			'correctAnswer is REQUIRED and is the option value, not a position number. Single-select: one string (e.g. "mercury"). Multi-select: an array of strings (e.g. ["belize", "niue"]).',
-			"Always pass the option's `value` string as correctAnswer — it is self-checking and prevents miscounting positions. A value that matches no option is a hard error.",
-			"explanation is REQUIRED — always say why the correct answer is correct.",
-			"Multi-select is graded as an exact-set match: the user is correct only if they select every correct option and no incorrect ones.",
-			"There is no free-text mode. An 'I don't know' choice is ALWAYS added automatically — provide ONLY the real, gradable options (at least two). Never add your own uncertainty/opt-out option like 'I don't know', 'I'm not sure', or 'Not sure'; that is handled for you and a manual one would be redundant or gradable-as-wrong.",
-			"If a result comes back as dontKnow, the user honestly did not know and did NOT guess — treat it as a genuine knowledge gap to teach into, not as a wrong answer.",
-			"Any answer (right, wrong, or 'I don't know') may carry an optional free-text `note` the user typed in the always-present note field. When present it reflects what they were thinking or unsure about — read it and let it steer your follow-up. It is omitted entirely when empty.",
-			"Treat each wrong answer (distractor) as a diagnostic probe, not just filler: make it a specific, believable mistake the user might actually hold — a common misconception, or an adjacent/easily-confused concept — so that WHICH wrong answer they pick reveals WHICH nuance of their understanding is off. You learn far more from a targeted wrong choice than from a binary right/wrong, and the choice tells you exactly which gap to teach into next (and what the explanation should address).",
-			"Guardrail: every distractor must be unambiguously wrong on the intended reading — tempting, but a real error, not a defensible alternative. Don't drift into trick questions.",
-			"Anti-guessing hygiene: don't let the correct answer stand out by form (longest, most precise, most hedged, or the only one in the right format). Keep options similar in length, specificity, and phrasing so it can't be picked from shape alone.",
-			"Set multiSelect: true only when more than one option is correct.",
-			"Options are shuffled before display by default, so don't worry about which position you list the correct answer in. Set shuffle: false only when option order is meaningful (ordered values, or an 'All/None of the above' option that must stay last).",
-			"To probe nuance, ask several quick quiz questions and adapt each one based on the previous answers, rather than writing one giant question.",
-			"Don't leak the answer through formatting: keep option phrasing/length even and don't hint which is correct.",
-		],
+			"Ask one graded multiple-choice question. Supply stable option values, the correct value(s), an explanation shown only after submission, and a separate self-contained recall question/answer for Anki export. Single-select and exact-set multi-select are supported; an automatic I don't know choice records an explicit knowledge gap. The optional note field is for short reasoning; extended or dictated answers belong in the ordinary composer. Use native ask for preferences and decisions. Keep every option parallel in wording and length, with plausible distractors and no answer-specific justification or formatting.",
 		parameters: QuizParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -909,7 +877,7 @@ export default function quiz(pi: ExtensionAPI) {
 			try {
 				options = normalizeOptions(params.options);
 			} catch (e) {
-				return unavailableResult(params.question, mode, `quiz ${(e as Error).message}`, [], context);
+				return unavailableResult(params.question, mode, `quiz ${e instanceof Error ? e.message : String(e)}`, [], context);
 			}
 
 			// Shuffle for display (default on) BEFORE resolving correct indices, so
@@ -919,7 +887,7 @@ export default function quiz(pi: ExtensionAPI) {
 			}
 
 			// Emit the true (post-shuffle) display order immediately, before the UI
-			// blocks on the user's answer. Listeners such as md-log rely on this to
+			// blocks on the user's answer. The Org logger relies on this to
 			// show the question in the SAME order the user actually sees it, instead
 			// of the pre-shuffle order the agent originally wrote in its tool call.
 			// Deliberately omits correctIndices/explanation — this fires before the
@@ -930,7 +898,7 @@ export default function quiz(pi: ExtensionAPI) {
 			});
 
 			const { indices: correctIndices, error: correctError } = resolveCorrect(
-				params.correctAnswer as string | string[],
+				params.correctAnswer,
 				options,
 			);
 
@@ -956,7 +924,8 @@ export default function quiz(pi: ExtensionAPI) {
 				return unavailableResult(params.question, mode, "quiz requires interactive mode UI", correctIndices, context);
 			}
 
-			return withUILock(async () => {
+			const pending = uiQueue.then(async () => {
+				if (signal?.aborted) return cancelledResult(params.question, mode, correctIndices, context);
 				const response =
 					mode === "single-select"
 						? await askSingleChoice(ctx, params.question, context, options, correctIndices, explanation)
@@ -964,11 +933,13 @@ export default function quiz(pi: ExtensionAPI) {
 				if (!response) {
 					return cancelledResult(params.question, mode, correctIndices, context);
 				}
-				return buildResult(params.question, context, mode, options, response, correctIndices, explanation);
+				return buildResult(params.question, context, mode, options, response, correctIndices, explanation, params.recall);
 			});
+			uiQueue = pending.then(() => undefined, () => undefined);
+			return pending;
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, _options, theme) {
 			// NOTE: never render correctAnswer or explanation here — it would leak
 			// the answer into the transcript before the user responds. We also do NOT
 			// enumerate the options here: they are shuffled at execute time, so any
