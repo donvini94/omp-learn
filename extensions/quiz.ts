@@ -864,6 +864,9 @@ export default function quiz(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "quiz",
 		label: "quiz",
+		// Teaching cannot proceed without it, so keep it in the always-active set
+		// instead of letting it demote to an `xd://` device the model must discover.
+		loadMode: "essential",
 		description:
 			"Ask one graded multiple-choice question. Supply stable option values, the correct value(s), an explanation shown only after submission, and a separate self-contained recall question/answer for Anki export. Single-select and exact-set multi-select are supported; an automatic I don't know choice records an explicit knowledge gap. The optional note field is for short reasoning; extended or dictated answers belong in the ordinary composer. Use native ask for preferences and decisions. Keep every option parallel in wording and length, with plausible distractors and no answer-specific justification or formatting.",
 		parameters: QuizParams,
