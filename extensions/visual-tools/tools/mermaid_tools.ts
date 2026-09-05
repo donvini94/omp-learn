@@ -39,12 +39,20 @@ import {
 } from "./_common.ts"
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
-const EXTENSION_DIR = dirname(TOOL_DIR)
-const ROOT_DIR = dirname(dirname(EXTENSION_DIR))
-const ROOT_MMDC_BIN = join(ROOT_DIR, "node_modules", ".bin", "mmdc")
-// Prefer the root-installed mmdc; fall back to a bare command name resolved
-// via PATH if the repo layout ever moves this extension elsewhere.
-const MMDC_BIN = existsSync(ROOT_MMDC_BIN) ? ROOT_MMDC_BIN : "mmdc"
+// The CLI lands in a different place depending on how this package was
+// installed: beside the package when developing, hoisted into the plugin
+// root's shared node_modules when installed via `omp plugin install`. Walk up
+// for the first node_modules/.bin/mmdc, then fall back to PATH.
+function resolveMmdc(): string {
+  for (let dir = TOOL_DIR; ; ) {
+    const candidate = join(dir, "node_modules", ".bin", "mmdc")
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) return "mmdc"
+    dir = parent
+  }
+}
+const MMDC_BIN = resolveMmdc()
 const GROUP = "mermaid"
 const BODY_FILE = "diagram.mmd"
 const RENDER_TIMEOUT_MS = 120_000

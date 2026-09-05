@@ -76,6 +76,15 @@ default when you launch the Emacs application; otherwise `M-x server-start`).
 
 ## Install
 
+While this repository is private (see [NOTICE.md](NOTICE.md)), install it over SSH — you need a GitHub account
+with access and an SSH key on the machine:
+
+```bash
+omp plugin install git+ssh://git@github.com/donvini94/omp-learn.git
+```
+
+If it is ever made public, the shorter form works too:
+
 ```bash
 omp plugin install github:donvini94/omp-learn
 ```
