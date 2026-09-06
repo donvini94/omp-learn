@@ -39,6 +39,10 @@ export default function learning(pi: ExtensionAPI): void {
       description: "Start a lesson (run /lesson-setup first)",
       handler: async (_args, ctx) => ctx.ui.notify("Run /lesson-setup, then restart OMP in the configured learning directory.", "warning"),
     });
+    pi.registerCommand("study", {
+      description: "Read a document together (run /lesson-setup first)",
+      handler: async (_args, ctx) => ctx.ui.notify("Run /lesson-setup, then restart OMP in the configured learning directory.", "warning"),
+    });
     return;
   }
 
