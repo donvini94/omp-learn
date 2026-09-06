@@ -42,6 +42,8 @@ edited. [NOTICE.md](NOTICE.md) lists exactly which files are derived and under w
 
 - **`/lesson <goal>`** — starts a logged teaching session. A new `.org` file is created in your learning
   directory and opened in Emacs; from then on every message, question, and answer lands in it.
+- **`/study <file or URL>`** — reads one document *with* you: it goes first, orients you, probes the
+  prerequisites the document assumes, primes only the gaps, then rides along while you read.
 - **Graded quizzes** — a popup with options, an always-present *I don't know* choice (which is recorded as a real
   knowledge gap, not a wrong guess), and a note field. You answer, it grades instantly and explains.
 - **Verified diagrams** — when a picture helps, a maker agent writes the diagram, renders it, *looks at the PNG*,
@@ -192,12 +194,56 @@ ordinary Org files, so Org-roam links, tags, and search work on them.
 To keep logging into a lesson you started earlier, open it with `/org-log <file>`; to stop writing into a log,
 `/org-unlog`.
 
+## Reading a document together
+
+`/lesson` teaches you a topic. `/study` works through one document with you — a paper, a
+whitepaper, a textbook chapter, a long article:
+
+```
+/study ~/papers/tls13.pdf
+/study https://example.com/some/very/long/post
+```
+
+The source is copied — or, for a URL, extracted — into `<learningDir>/sources/`, so it stays
+readable on later days and cannot change underneath a half-finished read. Then:
+
+1. **Orientation** — what this document is, its thesis in one sentence, how it is built, and what it
+   assumes you already know. No conclusions: you are about to read it.
+2. **Probe** — graded questions on the *prerequisites*, never on the document's own content. What it
+   finds is sorted into blockers, things the document itself will teach, and things out of scope.
+3. **Primer and release** — blockers get taught and confirmed, everything else is left for the
+   document. You get a short contract: what came back solid, what was just taught, what was
+   deliberately deferred.
+4. **The read** — you read top to bottom and drive with `next`, `done 3`, `skip 4`, or by quoting a
+   passage. Questions are answered directly, at the depth you asked for, without spoiling what is
+   ahead. A question built on a false premise is graded on the spot instead of answered. Finishing a
+   segment triggers a checkpoint quiz.
+5. **Close-out** — *you* produce the teach-back, diagnosis, or five-sentence explanation, the agent
+   grades and corrects it, and the corrected version lands in the log.
+
+Goal and depth are agreed in the first turn. Free-form is fine — "enough to argue this in a vendor
+call" — and is translated into one of three modes, echoed back for you to correct:
+
+| | **orient** | **working** | **mastery** |
+|---|---|---|---|
+| gate | blockers only, quickly | blockers, properly taught | every prerequisite strand bracketed |
+| boundary quiz | 1, or every other segment | 2 | 3–4 |
+| derivations | black-boxed | worked when you ask | opened by default |
+| close-out | explain it to a sharp skeptic | diagnose a broken scenario | teach-back, then a scenario |
+
+Progress lives in `<learningDir>/.study/<slug>.json` — segment map, cursor, gap ledger, goal, mode.
+Run `/study` on the same document tomorrow and it re-attaches that document's log and resumes.
+Cards from a study session carry an extra `study_<slug>` tag, so one document's cards can be
+reviewed on their own.
+
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `/lesson-setup` | create a learning workspace and its config |
 | `/lesson <goal>` | create today's Org log, open it in Emacs, start teaching toward that goal |
+| `/study <file or URL>` | read one document together: orientation, prerequisite probe, primer, guided read |
 | `/lesson-context <absolute file>` | grant read access to exactly one file outside the learning directory, for this session |
 | `/org-log [file]` | reopen and replay the current log, or attach an existing learning `.org` file |
 | `/org-unlog` | stop logging (the file is left alone) |
@@ -220,6 +266,9 @@ If a lesson needs an outside file — a paper, a codebase, a note that lives els
 ```
 
 That grants exactly that one file, for that session.
+
+`/study` needs no grant: it copies the document into the learning directory, which is also what lets
+a researcher child read the segment it was asked to brief.
 
 Inside logs, there is a further distinction it is told to respect: teacher prose is reference material, and only
 *your* answers and attempts count as evidence of what you understand.
@@ -256,6 +305,8 @@ discoverable rather than decreed) come from the original author's system.
 
 Other things worth editing:
 
+- `skills/study/SKILL.md` — the document-study control loop: what the primer may reveal, when you get
+  quizzed, how questions are answered mid-read.
 - `skills/visualize/SKILL.md` — when a picture is worth making.
 - `agents/researcher.md`, `agents/mermaid-maker.md`, `agents/svg-maker.md` — the child agents.
 - Drop your own agent definitions in `<learningDir>/.omp/agents/*.md` — those win over the bundled ones, so you

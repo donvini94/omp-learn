@@ -46,6 +46,9 @@ function messageRecord(message: unknown): { id: string; title: string; text: str
 
 export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
   let logFile: string | undefined;
+  // Cards from a /study session carry the document's tag alongside the shared
+  // one, so a year later a deck can be filtered back to its source.
+  let tag: string | undefined;
   let queue: Promise<void> = Promise.resolve();
   const completed = new Set<string>();
 
@@ -97,7 +100,7 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
     const back = await markdownToOrg(config, [recall.answer, result.explanation, recall.sources?.length ? `Sources:\n\n${recall.sources.map(source => `- ${source}`).join("\n")}` : undefined].filter(Boolean).join("\n\n"), config.ankiFile, 3);
     await appendOrg(config, {
       file: config.ankiFile, id, kind: "anki", heading: config.ankiHeading,
-      text: `** ${oneLine(recall.question)} :omp_learning:\n:PROPERTIES:\n:ANKI_NOTE_TYPE: Basic\n:ANKI_DECK: ${config.ankiDeck}\n:OMP_QUIZ_ID: ${id}\n:END:\n*** Front\n${front}\n*** Back\n${back}\n\n${orgFileLink(file, config.ankiFile, "Learning log")}\n`,
+      text: `** ${oneLine(recall.question)} :omp_learning:${tag ? `${tag}:` : ""}\n:PROPERTIES:\n:ANKI_NOTE_TYPE: Basic\n:ANKI_DECK: ${config.ankiDeck}\n:OMP_QUIZ_ID: ${id}\n:END:\n*** Front\n${front}\n*** Back\n${back}\n\n${orgFileLink(file, config.ankiFile, "Learning log")}\n`,
     });
     completed.add(key);
   }
@@ -217,5 +220,5 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
     },
   });
   pi.registerCommand("org-unlog", { description: "Stop logging without modifying the existing lesson", handler: async (_args, ctx) => { await queue; unlink(ctx); } });
-  return { getLogFile: () => logFile, start, link, unlink };
+  return { getLogFile: () => logFile, start, link, unlink, setTag: (value: string | undefined) => { tag = value; } };
 }

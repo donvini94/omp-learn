@@ -9,6 +9,7 @@ import { registerAccess } from "./access";
 import { registerNotebook } from "./notebook";
 import { registerInteractive } from "./interactive";
 import { registerInteractiveChild } from "./interactive-child";
+import { registerStudy } from "./study";
 
 export default function learning(pi: ExtensionAPI): void {
   pi.registerCommand("lesson-setup", {
@@ -48,8 +49,11 @@ export default function learning(pi: ExtensionAPI): void {
   visualTools(pi, config);
   if (child) registerInteractiveChild(pi, config);
   else registerInteractive(pi, config);
-  const teachFile = fileURLToPath(new URL("../skills/teach/SKILL.md", import.meta.url));
-  const teach = readFileSync(teachFile, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const skill = (name: string) =>
+    readFileSync(fileURLToPath(new URL(`../skills/${name}/SKILL.md`, import.meta.url)), "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const teach = skill("teach");
+  const study = skill("study");
+  const reading = registerStudy(pi, config, notebook);
 
   pi.registerCommand("lesson", {
     description: "Open the rendered Org log and begin or continue teaching toward a goal",
@@ -69,7 +73,8 @@ export default function learning(pi: ExtensionAPI): void {
   });
   pi.on("before_agent_start", event => {
     if (!notebook.getLogFile()) return;
-    return { systemPrompt: [...event.systemPrompt, teach] };
+    // Study overrides the lesson process and is appended after it to win precedence.
+    return { systemPrompt: [...event.systemPrompt, teach, ...(reading.active() ? [study] : [])] };
   });
   pi.on("tool_call", (event, ctx) => {
     if (event.toolName === "quiz" && !notebook.getLogFile()) {
