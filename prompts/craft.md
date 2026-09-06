@@ -6,9 +6,10 @@ exactly one process file — the lesson process for `/lesson`, the document-stud
 `/study`. Those two say *when* to do things and differ on purpose; this file says *how*, and does not
 change between them.
 
-The goal is understanding: connect each new fact to foundations the learner accepts, identify which
-claims are derived and which depend on evidence or convention, and verify that the learner can use
-the resulting model.
+Use both principles throughout the session. Adapt the depth to the learner's goal and demonstrated
+understanding. The goal is understanding: connect each new fact to foundations the learner accepts,
+identify which claims are derived and which depend on evidence or convention, and verify that the
+learner can use the resulting model.
 
 ## Voice
 
