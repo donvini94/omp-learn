@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
@@ -127,6 +127,22 @@ interface Notebook {
   setTag: (tag: string | undefined) => void;
 }
 
+/**
+ * The state file whose log is `log`, if any. `/study` records its own state on the
+ * session, but `/org-log` on a study log does not, and a document read must not
+ * silently fall back to the lesson process just because it was reopened that way.
+ */
+export function studyFor(config: LearnConfig, log: string): StudyMeta | undefined {
+  const dir = join(config.learningDir, ".study");
+  if (!existsSync(dir)) return undefined;
+  for (const entry of readdirSync(dir)) {
+    if (!entry.endsWith(".json")) continue;
+    const meta = readMeta(join(dir, entry));
+    if (meta.log === log) return meta;
+  }
+  return undefined;
+}
+
 export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: Notebook) {
   let active: string | undefined;
 
@@ -136,6 +152,16 @@ export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: N
       if (entry.type === "custom" && entry.customType === STATE) active = StudyState.parse(entry.data).meta ?? undefined;
     }
     notebook.setTag(active && existsSync(active) ? ankiTag(readMeta(active).slug) : undefined);
+  }
+
+  function reading(): StudyMeta | undefined {
+    const log = notebook.getLogFile();
+    if (!log) return undefined;
+    if (active && existsSync(active)) {
+      const meta = readMeta(active);
+      if (meta.log === log) return meta;
+    }
+    return studyFor(config, log);
   }
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
@@ -181,5 +207,12 @@ export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: N
     },
   });
 
-  return { active: () => Boolean(active) && Boolean(notebook.getLogFile()) };
+  return {
+    active: () => {
+      const meta = reading();
+      // A log reopened with /org-log carries no session state; adopt its tag on the way past.
+      if (meta) notebook.setTag(ankiTag(meta.slug));
+      return Boolean(meta);
+    },
+  };
 }

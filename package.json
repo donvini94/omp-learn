@@ -6,7 +6,7 @@
   "author": "Vincenzo Pace",
   "license": "SEE LICENSE IN NOTICE.md",
   "repository": { "type": "git", "url": "git+https://github.com/donvini94/omp-learn.git" },
-  "files": ["src", "extensions", "skills", "agents", "emacs", "README.md", "NOTICE.md", "LICENSE"],
+  "files": ["src", "extensions", "skills", "prompts", "agents", "emacs", "README.md", "NOTICE.md", "LICENSE"],
   "omp": {
     "extensions": ["./src/index.ts"]
   },

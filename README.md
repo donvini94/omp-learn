@@ -267,8 +267,9 @@ If a lesson needs an outside file — a paper, a codebase, a note that lives els
 
 That grants exactly that one file, for that session.
 
-`/study` needs no grant: it copies the document into the learning directory, which is also what lets
-a researcher child read the segment it was asked to brief.
+`/study` needs no grant: it copies the document into the learning directory. A study session also
+does no research of its own — the document is the whole corpus, and only a prerequisite it has to
+pre-teach ever gets looked up.
 
 Inside logs, there is a further distinction it is told to respect: teacher prose is reference material, and only
 *your* answers and attempts count as evidence of what you understand.
@@ -298,15 +299,21 @@ talks to Anki directly, and it never edits or reads notes it did not write.
 
 ## Making it yours
 
-The teaching philosophy is a plain Markdown file: `skills/teach/SKILL.md`. It is written for one specific
-learner, and you should edit it — how you like to be taught, what you already know, what "too easy" means for
-you. The two principles it is built on (start from foundations you accept at face value; make every step feel
-discoverable rather than decreed) come from the original author's system.
+Three plain Markdown files, and you should edit them — they are written for one specific learner:
+
+- `prompts/craft.md` — the shared craft, injected into every logged session: the voice, the
+  philosophy, the two principles, how a graded question is built, when to stop and verify. The two
+  principles (start from foundations you accept at face value; make every step feel discoverable
+  rather than decreed) come from the original author's system.
+- `skills/teach/SKILL.md` — the `/lesson` process only: probe, plan, teach the graph, verify.
+- `skills/study/SKILL.md` — the `/study` process only: orientation, probe, primer, read-along,
+  close-out.
+
+Exactly one process file is injected per session, so `/lesson` never sees the study loop and
+`/study` never sees the lesson's plan-and-approve phase.
 
 Other things worth editing:
 
-- `skills/study/SKILL.md` — the document-study control loop: what the primer may reveal, when you get
-  quizzed, how questions are answered mid-read.
 - `skills/visualize/SKILL.md` — when a picture is worth making.
 - `agents/researcher.md`, `agents/mermaid-maker.md`, `agents/svg-maker.md` — the child agents.
 - Drop your own agent definitions in `<learningDir>/.omp/agents/*.md` — those win over the bundled ones, so you

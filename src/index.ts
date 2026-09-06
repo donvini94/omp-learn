@@ -49,10 +49,13 @@ export default function learning(pi: ExtensionAPI): void {
   visualTools(pi, config);
   if (child) registerInteractiveChild(pi, config);
   else registerInteractive(pi, config);
-  const skill = (name: string) =>
-    readFileSync(fileURLToPath(new URL(`../skills/${name}/SKILL.md`, import.meta.url)), "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
-  const teach = skill("teach");
-  const study = skill("study");
+  // Craft is shared; exactly one process file is in force. Injecting both processes
+  // would leave the model to arbitrate two contradictory session shapes by instruction.
+  const prompt = (path: string) =>
+    readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const craft = prompt("prompts/craft.md");
+  const lesson = prompt("skills/teach/SKILL.md");
+  const study = prompt("skills/study/SKILL.md");
   const reading = registerStudy(pi, config, notebook);
 
   pi.registerCommand("lesson", {
@@ -73,8 +76,7 @@ export default function learning(pi: ExtensionAPI): void {
   });
   pi.on("before_agent_start", event => {
     if (!notebook.getLogFile()) return;
-    // Study overrides the lesson process and is appended after it to win precedence.
-    return { systemPrompt: [...event.systemPrompt, teach, ...(reading.active() ? [study] : [])] };
+    return { systemPrompt: [...event.systemPrompt, craft, reading.active() ? study : lesson] };
   });
   pi.on("tool_call", (event, ctx) => {
     if (event.toolName === "quiz" && !notebook.getLogFile()) {

@@ -10,9 +10,11 @@ dependency graph you invented. Here the document owns the curriculum, he owns th
 job is to prepare him for the text, stay ahead of him in it, answer what he asks, and check that it
 landed.
 
-**Precedence.** The teaching skill's *Voice*, *philosophy*, quiz-authoring procedure, recall-card
-rules and accuracy discipline govern everything below without change. What this skill replaces is
-the teaching skill's Phase 1–4 process: use the phases in this file instead.
+This is the **document-study** process, and it is the only process in force this session. The lesson
+process — probe, plan, present a dependency graph, wait for approval, teach it node by node — is not
+loaded here and does not apply. What both share is `prompts/craft.md`, injected alongside this file:
+the voice, the philosophy, the two principles, how a graded question is built, when to verify. That
+governs everything below without change.
 
 ## The state file
 
@@ -52,9 +54,8 @@ conclusion. That is enough to know what the document is, how it is built, and wh
 **3. Decide the ingest.** If the whole document comfortably fits, read it now — the primer is better
 for it, and you can warn him about a trap in section 9. If it does not, read the framing sections
 and hold this invariant for the rest of the session: **you have always read the segment he is in and
-the one after it.** While he reads segment *n*, get segment *n+1* read — dispatch a `researcher`
-child for the brief when the segment is long, since the snapshot is inside the learning directory
-and a child can read it. Never let him get ahead of you.
+the one after it.** While he reads segment *n*, read segment *n+1* yourself from the snapshot. Never
+let him get ahead of you.
 
 **4. Give the orientation, not the primer.** Short, prose, no headings: what this document is and
 who wrote it for whom, its thesis in one sentence, how it is structured, and what it takes for
@@ -165,5 +166,8 @@ gap ledger — every gap either closed, or carried with a sentence saying why an
 - Never let him read further than you have.
 - Every `quiz` carries a complete, self-contained `recall` pair; that is the only source of cards.
 - The snapshot is the citable artifact. Quote it with line numbers; do not paraphrase from memory.
-- When you are unsure of a fact the document depends on, verify it before saying it — a `researcher`
-  child, or a direct lookup for something small. His trust in the read depends on this.
+- **The document is the corpus.** Everything to be consumed is already attached, so there is no
+  research child in this session and no going off to survey the field. When a *prerequisite* you are
+  about to pre-teach is one you are unsure of, look that one fact up directly and move on. When the
+  document itself says something you believe is wrong or out of date, say so at his cursor, with
+  what you checked.
