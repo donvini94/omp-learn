@@ -19,6 +19,7 @@ const Quiz = z.object({
   options: z.array(Option).optional(), answers: z.array(Option).default([]),
   correctIndices: z.array(z.number()).default([]), correct: z.boolean().optional(),
   dontKnow: z.boolean().optional(), note: z.string().optional(), explanation: z.string().optional(),
+  confidence: z.enum(["low", "medium", "high"]).optional(),
   recall: Recall.optional(),
 });
 const VisibleMessage = z.object({ role: z.enum(["user", "assistant"]), timestamp: z.number(), content: z.union([z.string(), z.array(z.unknown())]) });
@@ -90,7 +91,7 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
     const answer = result.dontKnow ? "I don't know" : result.answers.map(option => `${option.index}. ${option.label}`).join(", ");
     const correct = result.correctIndices.map(index => result.options?.find(option => option.index === index)?.label || String(index)).join("; ");
     await record(file, `quiz-answer-${id}`, result.dontKnow ? "Quiz — unknown" : result.correct ? "Quiz — correct" : "Quiz — incorrect", [
-      `Your answer: ${answer}`, result.note && `Your reasoning: ${result.note}`, `Correct answer: ${correct}`, result.explanation,
+      `Your answer: ${answer}`, result.confidence && `Your confidence: ${result.confidence}`, result.note && `Your reasoning: ${result.note}`, `Correct answer: ${correct}`, result.explanation,
     ].filter(Boolean).join("\n\n"));
     if (!config.ankiFile) return;
     const recall = Recall.parse(result.recall);

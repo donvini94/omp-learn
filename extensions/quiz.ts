@@ -47,6 +47,17 @@ const DONT_KNOW_VALUE = "__dont_know__";
 const DONT_KNOW_LABEL = "I don't know";
 const DONT_KNOW_INDEX = 0; // real options are 1-based; submit uses -1
 
+// Self-rated confidence, collected after a real answer and before the grade is
+// revealed (a rating given after seeing ✓/✗ is hindsight). "I don't know"
+// skips it: that answer already states zero confidence. A certain-but-wrong
+// answer is the signal that separates a held misconception from a slip.
+type Confidence = "low" | "medium" | "high";
+const CONFIDENCE_ORDER: readonly Confidence[] = ["low", "medium", "high"];
+const CONFIDENCE_LABELS: Record<Confidence, string> = { low: "Guessing", medium: "Fairly sure", high: "Certain" };
+// Cursor starts on the middle level, so an absent-minded Enter records the
+// least informative rating rather than an extreme.
+const CONFIDENCE_DEFAULT_CURSOR = 1;
+
 // Unified response from either ask* component. answers holds the real
 // selections (empty when dontKnow); note is the optional free-text the user
 // typed in the always-present note field (kept only when non-empty).
@@ -54,6 +65,7 @@ interface QuizResponse {
 	dontKnow: boolean;
 	note?: string;
 	answers: OptionAnswer[];
+	confidence?: Confidence; // absent exactly when dontKnow
 }
 
 type QuizStatus = "answered" | "cancelled" | "unavailable";
@@ -81,6 +93,7 @@ interface QuizResultDetails {
 	correct?: boolean;
 	dontKnow?: boolean; // user selected "I don't know" instead of guessing
 	note?: string; // optional free-text from the always-present note field (any answer)
+	confidence?: Confidence; // self-rated before the reveal; absent for "I don't know"
 	explanation?: string;
 	message?: string;
 	// Recall card echoed from params.recall — populated ONLY on the final
@@ -192,8 +205,9 @@ function buildStructuredResult(
 	dontKnow?: boolean,
 	note?: string,
 	recall?: RecallInfo,
+	confidence?: Confidence,
 ): QuizResultDetails {
-	return { status, question, context, mode, answers, correctIndices, options, correct, dontKnow, note, explanation, message, recall };
+	return { status, question, context, mode, answers, correctIndices, options, correct, dontKnow, note, confidence, explanation, message, recall };
 }
 
 function cancelledResult(question: string, mode: QuizMode, correctIndices: number[], context?: string) {
@@ -226,7 +240,7 @@ function buildResult(
 	explanation: string | undefined,
 	recall: RecallInfo,
 ) {
-	const { dontKnow, note, answers } = response;
+	const { dontKnow, note, answers, confidence } = response;
 	const selectedIndices = answers.map((a) => a.index);
 	// "I don't know" is never counted as correct — it's a distinct outcome.
 	const correct = dontKnow ? false : isCorrect(selectedIndices, correctIndices);
@@ -244,6 +258,7 @@ function buildResult(
 		const verdict = correct ? "correctly" : "incorrectly";
 		const selectedStr = answers.map((a) => `${a.index}. ${a.label}`).join(", ");
 		text = `User answered ${verdict}.\nSelected: ${selectedStr}\nCorrect: ${correctStr}`;
+		if (confidence) text += `\nStated confidence (before the reveal): ${CONFIDENCE_LABELS[confidence]} (${confidence})`;
 		if (note) text += `\nUser's note: ${note}`;
 	}
 	if (explanation) text += `\nExplanation: ${explanation}`;
@@ -264,6 +279,7 @@ function buildResult(
 			dontKnow,
 			note,
 			recall,
+			confidence,
 		),
 	};
 }
@@ -279,6 +295,7 @@ function renderFeedback(
 	explanation: string | undefined,
 	dontKnow = false,
 	note?: string,
+	confidence?: Confidence,
 ): void {
 	const add = (text: string) => lines.push(truncateToWidth(text, width));
 	const correct = !dontKnow && isCorrect(selectedIndices, correctIndices);
@@ -325,6 +342,9 @@ function renderFeedback(
 		add(theme.fg("error", " ✗ Incorrect."));
 		const correctStr = correctIndices.map((i) => formatOptionRef(options, i)).join(", ");
 		addWrapped(lines, theme.fg("muted", `Correct answer: ${correctStr}`), width, " ");
+	}
+	if (confidence) {
+		add(theme.fg("muted", ` Your confidence: ${CONFIDENCE_LABELS[confidence]}`));
 	}
 	if (note) {
 		addWrapped(lines, theme.fg("muted", `Your note: ${note}`), width, " ");
@@ -378,6 +398,39 @@ function makeNoteEditor(): Editor {
 	return editor;
 }
 
+// Confidence step, rendered between answering and the reveal.
+function pushConfidencePrompt(lines: string[], theme: Theme, width: number, answer: string, cursor: number): void {
+	const add = (text: string) => lines.push(truncateToWidth(text, width));
+	lines.push("");
+	addWrapped(lines, theme.fg("muted", `Your answer: ${answer}`), width, " ");
+	lines.push("");
+	add(theme.fg("text", " How sure are you?"));
+	for (let i = 0; i < CONFIDENCE_ORDER.length; i++) {
+		const focused = i === cursor;
+		const prefix = focused ? theme.fg("accent", "> ") : "  ";
+		const label = `${i + 1}. ${CONFIDENCE_LABELS[CONFIDENCE_ORDER[i]]}`;
+		add(`${prefix}${focused ? theme.fg("accent", label) : theme.fg("text", label)}`);
+	}
+	lines.push("");
+	add(theme.fg("dim", " ↑↓ navigate • 1-3 or Enter rate • Esc change answer"));
+}
+
+type ConfidenceKey =
+	| { kind: "move"; cursor: number }
+	| { kind: "rate"; confidence: Confidence }
+	| { kind: "back" }
+	| { kind: "ignore" };
+
+// Shared key handling for the confidence step; digits 1-3 rate directly.
+function confidenceKey(data: string, cursor: number): ConfidenceKey {
+	if (matchesKey(data, Key.up)) return { kind: "move", cursor: Math.max(0, cursor - 1) };
+	if (matchesKey(data, Key.down)) return { kind: "move", cursor: Math.min(CONFIDENCE_ORDER.length - 1, cursor + 1) };
+	if (matchesKey(data, Key.enter)) return { kind: "rate", confidence: CONFIDENCE_ORDER[cursor] };
+	if (matchesKey(data, Key.escape)) return { kind: "back" };
+	const direct = /^[1-9]$/.test(data) ? CONFIDENCE_ORDER[Number(data) - 1] : undefined;
+	return direct ? { kind: "rate", confidence: direct } : { kind: "ignore" };
+}
+
 async function askSingleChoice(
 	ctx: ExtensionContext,
 	question: string,
@@ -396,10 +449,12 @@ async function askSingleChoice(
 	return ctx.ui.custom<QuizResponse | null>(
 		(tui, theme, _kb, done) => {
 			let optionIndex = 0;
-			let phase: "select" | "feedback" = "select";
+			let phase: "select" | "confidence" | "feedback" = "select";
 			let focus: "options" | "note" = "options";
 			let chosen: OptionAnswer | null = null;
 			let dontKnow = false;
+			let confidence: Confidence | undefined;
+			let confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
 			const editor = makeNoteEditor();
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
@@ -424,7 +479,7 @@ async function askSingleChoice(
 				const note = noteText();
 				return dontKnow
 					? { dontKnow: true, note, answers: [] }
-					: { dontKnow: false, note, answers: chosen ? [chosen] : [] };
+					: { dontKnow: false, note, answers: chosen ? [chosen] : [], confidence };
 			}
 
 			function handleInput(data: string) {
@@ -432,6 +487,18 @@ async function askSingleChoice(
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
 						done(response());
 					}
+					return;
+				}
+
+				if (phase === "confidence") {
+					const key = confidenceKey(data, confidenceCursor);
+					if (key.kind === "ignore") return;
+					if (key.kind === "move") confidenceCursor = key.cursor;
+					else if (key.kind === "rate") {
+						confidence = key.confidence;
+						phase = "feedback";
+					} else phase = "select";
+					refresh();
 					return;
 				}
 
@@ -471,12 +538,14 @@ async function askSingleChoice(
 					if (optionIndex === dontKnowNav) {
 						dontKnow = true;
 						chosen = null;
+						phase = "feedback";
 					} else {
 						const selected = allOptions[optionIndex];
 						chosen = { label: selected.label, value: selected.value, index: selected.index };
 						dontKnow = false;
+						confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
+						phase = "confidence";
 					}
-					phase = "feedback";
 					refresh();
 					return;
 				}
@@ -507,7 +576,16 @@ async function askSingleChoice(
 						explanation,
 						dontKnow,
 						noteText(),
+						confidence,
 					);
+					add(theme.fg("accent", "─".repeat(width)));
+					cachedLines = lines;
+					cachedWidth = width;
+					return lines;
+				}
+
+				if (phase === "confidence" && chosen) {
+					pushConfidencePrompt(lines, theme, width, `${chosen.index}. ${chosen.label}`, confidenceCursor);
 					add(theme.fg("accent", "─".repeat(width)));
 					cachedLines = lines;
 					cachedWidth = width;
@@ -584,7 +662,9 @@ async function askMultiChoice(
 	return ctx.ui.custom<QuizResponse | null>(
 		(tui, theme, _kb, done) => {
 			let optionIndex = 0;
-			let phase: "select" | "feedback" = "select";
+			let phase: "select" | "confidence" | "feedback" = "select";
+			let confidence: Confidence | undefined;
+			let confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
 			let focus: "options" | "note" = "options";
 			const editor = makeNoteEditor();
 			let cachedLines: string[] | undefined;
@@ -615,7 +695,7 @@ async function askMultiChoice(
 				const note = noteText();
 				return choseDontKnow()
 					? { dontKnow: true, note, answers: [] }
-					: { dontKnow: false, note, answers: realAnswers() };
+					: { dontKnow: false, note, answers: realAnswers(), confidence };
 			}
 
 			// "I don't know" is exclusive: choosing it clears real selections, and
@@ -641,7 +721,12 @@ async function askMultiChoice(
 
 			function submit() {
 				if (selected.size === 0) return;
-				phase = "feedback";
+				if (choseDontKnow()) {
+					phase = "feedback";
+				} else {
+					confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
+					phase = "confidence";
+				}
 				refresh();
 			}
 
@@ -650,6 +735,18 @@ async function askMultiChoice(
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
 						done(response());
 					}
+					return;
+				}
+
+				if (phase === "confidence") {
+					const key = confidenceKey(data, confidenceCursor);
+					if (key.kind === "ignore") return;
+					if (key.kind === "move") confidenceCursor = key.cursor;
+					else if (key.kind === "rate") {
+						confidence = key.confidence;
+						phase = "feedback";
+					} else phase = "select";
+					refresh();
 					return;
 				}
 
@@ -729,7 +826,17 @@ async function askMultiChoice(
 						explanation,
 						choseDontKnow(),
 						noteText(),
+						confidence,
 					);
+					add(theme.fg("accent", "─".repeat(width)));
+					cachedLines = lines;
+					cachedWidth = width;
+					return lines;
+				}
+
+				if (phase === "confidence") {
+					const answer = realAnswers().map((a) => `${a.index}. ${a.label}`).join(", ");
+					pushConfidencePrompt(lines, theme, width, answer, confidenceCursor);
 					add(theme.fg("accent", "─".repeat(width)));
 					cachedLines = lines;
 					cachedWidth = width;
@@ -868,7 +975,7 @@ export default function quiz(pi: ExtensionAPI) {
 		// instead of letting it demote to an `xd://` device the model must discover.
 		loadMode: "essential",
 		description:
-			"Ask one graded multiple-choice question. Supply stable option values, the correct value(s), an explanation shown only after submission, and a separate self-contained recall question/answer for Anki export. Single-select and exact-set multi-select are supported; an automatic I don't know choice records an explicit knowledge gap. The optional note field is for short reasoning; extended or dictated answers belong in the ordinary composer. Use native ask for preferences and decisions. Keep every option parallel in wording and length, with plausible distractors and no answer-specific justification or formatting.",
+			"Ask one graded multiple-choice question. Supply stable option values, the correct value(s), an explanation shown only after submission, and a separate self-contained recall question/answer for Anki export. Single-select and exact-set multi-select are supported; an automatic I don't know choice records an explicit knowledge gap. After a real answer and before the reveal, the user rates confidence (Guessing / Fairly sure / Certain); the result reports it, so a certain-but-wrong answer is distinguishable from a guess. The optional note field is for short reasoning; extended or dictated answers belong in the ordinary composer. Use native ask for preferences and decisions. Keep every option parallel in wording and length, with plausible distractors and no answer-specific justification or formatting.",
 		parameters: QuizParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -1020,7 +1127,7 @@ export default function quiz(pi: ExtensionAPI) {
 				: details.correct
 					? theme.fg("success", "Correct!")
 					: theme.fg("error", "Incorrect");
-			lines.push(verdict);
+			lines.push(details.confidence ? `${verdict}${theme.fg("muted", ` · confidence: ${CONFIDENCE_LABELS[details.confidence]}`)}` : verdict);
 
 			if (details.note) {
 				lines.push(theme.fg("muted", `Note: ${details.note}`));

@@ -45,7 +45,9 @@ edited. [NOTICE.md](NOTICE.md) lists exactly which files are derived and under w
 - **`/study <file or URL>`** — reads one document *with* you: it goes first, orients you, probes the
   prerequisites the document assumes, primes only the gaps, then rides along while you read.
 - **Graded quizzes** — a popup with options, an always-present *I don't know* choice (which is recorded as a real
-  knowledge gap, not a wrong guess), and a note field. You answer, it grades instantly and explains.
+  knowledge gap, not a wrong guess), and a note field. After a real answer, and before the grade is shown, it asks
+  how sure you were (Guessing, Fairly sure, Certain); a confident wrong answer tells the teacher it is facing a
+  misconception rather than a gap. Then it grades instantly and explains.
 - **Verified diagrams** — when a picture helps, a maker agent writes the diagram, renders it, *looks at the PNG*,
   fixes it, and only then hands it over. It shows up inline in the Org log.
 - **A researcher** — before planning, and any time it is unsure of a fact, it dispatches a research session
@@ -164,19 +166,22 @@ delivered to the teacher automatically — you do not have to do anything.
 3. Type `/lesson I want to understand how TLS actually protects a connection`.
    - A new Org file is created and opened in Emacs. Put that Emacs window next to your terminal — it is the
      comfortable, rendered view of the same session.
-4. **Probe.** You will get a run of quiz popups. Arrow keys select, `Enter` answers. `Tab` focuses the note field
-   if you want to add a short aside. Answer honestly and use *I don't know* freely — a wrong guess and a genuine
-   gap teach it different things. This phase is deliberately long: it is mapping the edge of what you know.
+4. **Probe.** You will get a run of quiz popups. Arrow keys select, `Enter` answers, then `1`–`3` (or arrows and
+   `Enter`) rates how sure you were; `Esc` there goes back to the options. `Tab` focuses the note field if you want
+   to add a short aside. Answer honestly and use *I don't know* freely — a wrong guess and a genuine gap teach it
+   different things. This phase is deliberately long: it is mapping the edge of what you know, so the questions
+   climb until you miss.
    Anything longer than a short note — reasoning you want to talk through, including dictated — belongs in the
    normal composer as an ordinary message, before or after the popup.
 5. **Goal.** It will ask, without grading, what you actually want out of the topic. Be concrete.
-6. **Plan.** It researches the topic in a child pane, then shows you a plan in prose plus a dependency diagram:
-   foundations at the roots, your goal at the sink. **It stops here and waits.** Read the plan. If a root looks
+6. **Plan.** It researches the topic in a child pane, then shows you a plan in prose, a dependency diagram
+   (foundations at the roots, your goal at the sink), and the final check you will do at the end.
+   **It stops here and waits.** Read the plan. If a root looks
    wrong or the scope is off, say so now — this is the cheap moment to fix it.
 7. **Teach.** Say go. It works down the graph one node at a time: motivate, establish, connect to what you
    already have, then a quiz to confirm that node landed. Interrupt whenever you like, ask anything.
-8. **Final check.** When the graph is built it runs one holistic check on the goal itself — teach-back, a broken
-   scenario to diagnose, a design decision to defend, or code to write, whichever matches your goal.
+8. **Final check.** When the graph is built it runs the check named in the plan — teach-back, a broken scenario to
+   diagnose, a design decision to defend, code to write, or rebuilding the dependency map from memory.
 
 Everything from steps 3–8 is in the Org file, and every quiz has become a flashcard.
 

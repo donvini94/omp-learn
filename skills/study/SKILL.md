@@ -72,7 +72,8 @@ This map is the coordinate system for everything that follows.
 **6. Agree the contract.** Ask for his goal and depth with `ask` — this is a genuine fork with no
 right answer, so it never goes through `quiz`. Accept a free-form goal ("enough to argue this in a
 vendor call") and translate it into one of the three modes, then echo the translation back in one
-sentence so he can correct it before anything is spent. He may say "go shallower" at any point;
+sentence, including the close-out he will do at the end, so he can correct it before anything is
+spent. Naming the close-out now tells him what to read for. He may say "go shallower" at any point;
 re-echo the contract when he does.
 
 | | **orient** | **working** | **mastery** |
@@ -92,10 +93,16 @@ read: grading him on it now is either unanswerable or a spoiler. What blocks a r
 background the author takes for granted — the notation, the prior results, the vocabulary a section
 uses without defining. Extract that list from the skeleton read and probe it.
 
+Before the first question, tell him once what the probe is for: the questions climb past what he
+knows on purpose, the misses are the useful part, and *I don't know* is a good answer. Without that,
+escalating misses read as a test he is failing, and he starts guessing.
+
 Everything the teaching skill says about locating an edge applies here: bracket each strand with
 something he gets right and something he does not, escalate hard after a correct answer instead of
 inching, treat *I don't know* as a different signal from a wrong guess, and probe around a miss to
-tell a slip from a misconception. A clean run means the questions were too easy.
+tell a slip from a misconception. Read every answer with its confidence rating (see the craft file):
+a guessed right answer is not a floor, and a certain wrong one is the first place to probe. A clean
+run means the questions were too easy.
 
 Sort every gap you find into exactly one of three:
 
@@ -136,17 +143,22 @@ and give only what unblocks the current page — "section 7 derives this; for no
 holds" — rather than dumping section 7 or refusing to answer. Never paraphrase a result he has not
 reached.
 
-**Wrong premises.** If a question of his is built on a false assumption, do not answer into it.
-Grade the misconception immediately with a `quiz`, then answer. A wrong model is cheapest to kill
-while it is live; three segments later he has built on it.
+**Wrong premises.** If a question of his is built on a false assumption, do not answer into it. Run
+the dislodging sequence from the craft file, starting with the prediction `quiz`, then answer. Keep
+it short; he is mid-page. A wrong model is cheapest to kill while it is live; three segments later
+he has built on it. At a later boundary checkpoint, include a question where the old model would come
+back, to check that it stays gone.
 
 **Otherwise, do not interrupt.** No unprompted quizzes mid-segment, no unsolicited commentary, no
 teaching he did not ask for. Between his markers you are answering questions and reading ahead.
 
 **Boundary checkpoint**, on every marker, sized by the mode: graded questions on the segment he just
-finished, each with its recall card. Then close any gap the segment closed, note any new one, update
-the state file. If a checkpoint answer exposes a misconception rather than a slip, fix it before he
-starts the next segment.
+finished, each with its recall card. When the checkpoint has more than one question, one of them
+connects the segment to something earlier (a previous segment, or a prerequisite you primed), so the
+checkpoint tests how the segment rests on the rest of the document as well as what it says. Then
+close any gap the segment closed, note any new one, update the state file. If a checkpoint answer
+exposes a misconception rather than a slip, fix it with the dislodging sequence before he starts the
+next segment.
 
 ## Phase E — Close out
 
