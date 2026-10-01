@@ -1,6 +1,6 @@
 {
   "name": "omp-learn-org",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "OMP teaching, verified diagrams, Org-roam learning logs, and Anki recall cards",
   "type": "module",
   "author": "Vincenzo Pace",

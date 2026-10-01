@@ -88,12 +88,24 @@ default when you launch the Emacs application; otherwise `M-x server-start`).
 ## Install
 
 ```bash
-omp plugin install github:donvini94/omp-learn
+omp plugin marketplace add donvini94/omp-learn
+omp plugin install omp-learn-org@omp-learn
+omp config set marketplace.autoUpdate auto
 ```
 
-That downloads the package and its dependencies. To update later, run the same command again. To remove it:
-`omp plugin uninstall omp-learn-org`. (SSH works too, if you prefer it:
-`omp plugin install git+ssh://git@github.com/donvini94/omp-learn.git`.)
+This installs the plugin and enables OMP's native startup update checks and automatic
+upgrades when the marketplace catalog publishes a newer version. If a managed config
+overlay overrides `marketplace.autoUpdate`, set it to `auto` there as well.
+
+For an existing direct Git install, first run `omp plugin uninstall omp-learn-org`,
+then use the commands above. Your learning workspace and logs are not removed.
+To remove the marketplace install:
+`omp plugin uninstall --scope user omp-learn-org@omp-learn`.
+
+Manual updates remain available through `omp plugin upgrade omp-learn-org@omp-learn`.
+When publishing a release, update both `package.json` and
+`.omp-plugin/marketplace.json` to the same newer version; startup checks compare the
+catalog version with the installed version.
 
 Then create your workspace — start `omp` anywhere and run:
 
