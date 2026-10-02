@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import type { HarnessApi } from "./harness";
+import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { canonicalPath, inside } from "./access";
 import { expandPath, type LearnConfig } from "./config";
 
@@ -143,7 +144,7 @@ export function studyFor(config: LearnConfig, log: string): StudyMeta | undefine
   return undefined;
 }
 
-export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: Notebook) {
+export function registerStudy(pi: HarnessApi, config: LearnConfig, notebook: Notebook, piLifecycle = false) {
   let active: string | undefined;
 
   function restore(ctx: ExtensionContext): void {
@@ -151,7 +152,9 @@ export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: N
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === STATE) active = StudyState.parse(entry.data).meta ?? undefined;
     }
-    notebook.setTag(active && existsSync(active) ? ankiTag(readMeta(active).slug) : undefined);
+    const meta = active && existsSync(active) ? readMeta(active) : undefined;
+    notebook.setTag(meta ? ankiTag(meta.slug) : undefined);
+    ctx.ui.setStatus("omp-learn-study", meta ? `Study: ${meta.slug}` : undefined);
   }
 
   function reading(): StudyMeta | undefined {
@@ -165,8 +168,10 @@ export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: N
   }
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
-  pi.on("session_switch", (_event, ctx) => restore(ctx));
-  pi.on("session_branch", (_event, ctx) => restore(ctx));
+  if (!piLifecycle) {
+    pi.on("session_switch", (_event, ctx) => restore(ctx));
+    pi.on("session_branch", (_event, ctx) => restore(ctx));
+  }
   pi.on("session_tree", (_event, ctx) => restore(ctx));
 
   pi.registerCommand("study", {
@@ -200,7 +205,7 @@ export function registerStudy(pi: ExtensionAPI, config: LearnConfig, notebook: N
         active = file;
         pi.appendEntry(STATE, { meta: file });
         notebook.setTag(ankiTag(meta.slug));
-        pi.sendUserMessage(kickoff(meta, file, resuming));
+        ctx.ui.setStatus("omp-learn-study", `Study: ${meta.slug}`);
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }

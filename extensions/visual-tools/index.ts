@@ -22,12 +22,12 @@
  * interactive-subagents indirection, and no personal/author-local paths.
  */
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+import type { HarnessApi } from "../../src/harness"
 import type { LearnConfig } from "../../src/config.ts"
 import mermaidToolsExtension from "./tools/mermaid_tools.ts"
 import svgToolsExtension from "./tools/svg_tools.ts"
 
-export default function visualTools(pi: ExtensionAPI, config: LearnConfig) {
+export default function visualTools(pi: HarnessApi, config: LearnConfig) {
   mermaidToolsExtension(pi, config)
   svgToolsExtension(pi, config)
 }

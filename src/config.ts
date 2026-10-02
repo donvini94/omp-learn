@@ -48,3 +48,39 @@ export function loadConfig(cwd: string): LearnConfig | undefined {
     browserExecutable: values.browserExecutable ? expandPath(values.browserExecutable, base) : undefined,
   };
 }
+
+/**
+ * A resumed subagent starts in the multiplexer pane's directory, not the lesson's, so the
+ * session header's recorded cwd is the only place its workspace is knowable. HazAT's resume
+ * launcher exports PI_SUBAGENT_SESSION with the explicit session path.
+ */
+function sessionCwd(sessionPath: string): string | undefined {
+  try {
+    const header: unknown = JSON.parse(readFileSync(sessionPath, "utf8").split("\n", 1)[0] ?? "");
+    if (header && typeof header === "object" && "cwd" in header && typeof header.cwd === "string") return header.cwd;
+  } catch {
+    // An unreadable header yields no workspace, which leaves the session unconfigured.
+  }
+  return undefined;
+}
+
+export function loadPiConfig(cwd: string): LearnConfig | undefined {
+  const resumed = process.env.PI_SUBAGENT_SESSION ? sessionCwd(process.env.PI_SUBAGENT_SESSION) : undefined;
+  const file = process.env.PI_LEARN_CONFIG || join(resumed && !existsSync(join(cwd, ".pi", "learn.json")) ? resumed : cwd, ".pi", "learn.json");
+  if (!existsSync(file)) return undefined;
+  const values = ConfigFile.parse(JSON.parse(readFileSync(file, "utf8")));
+  const base = dirname(resolve(file));
+  const learningDir = realpathSync(expandPath(values.learningDir, base));
+  const ankiFile = values.ankiFile ? expandPath(values.ankiFile, base) : undefined;
+  // Pi child sessions inherit this explicit configuration instead of searching notes.
+  process.env.PI_LEARN_CONFIG = resolve(file);
+  return {
+    learningDir,
+    ankiFile,
+    ankiHeading: values.ankiHeading,
+    ankiDeck: values.ankiDeck,
+    emacsclient: values.emacsclient,
+    pandoc: values.pandoc,
+    browserExecutable: values.browserExecutable ? expandPath(values.browserExecutable, base) : undefined,
+  };
+}

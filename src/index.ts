@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { getEditorTheme, type ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { Editor, Key, Text, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
 import quiz from "../extensions/quiz";
 import visualTools from "../extensions/visual-tools/index";
 import { expandPath, loadConfig } from "./config";
 import { registerAccess } from "./access";
+import type { HarnessApi } from "./harness";
 import { registerNotebook } from "./notebook";
 import { registerInteractive } from "./interactive";
 import { registerInteractiveChild } from "./interactive-child";
@@ -47,10 +49,19 @@ export default function learning(pi: ExtensionAPI): void {
   }
 
   const child = Boolean(process.env.OMP_LEARN_CHILD);
+  // Both harnesses implement this slice; their full ExtensionAPI types are not mutually assignable.
+  const shared = pi as unknown as HarnessApi;
   registerAccess(pi, config);
-  const notebook = registerNotebook(pi, config);
-  quiz(pi);
-  visualTools(pi, config);
+  const notebook = registerNotebook(shared, config);
+  quiz(shared, {
+    Key,
+    Text,
+    matchesKey,
+    truncateToWidth,
+    wrapTextWithAnsi,
+    makeEditor: () => new Editor(getEditorTheme()),
+  });
+  visualTools(shared, config);
   if (child) registerInteractiveChild(pi, config);
   else registerInteractive(pi, config);
   // Craft is shared; exactly one process file is in force. Injecting both processes
@@ -60,7 +71,7 @@ export default function learning(pi: ExtensionAPI): void {
   const craft = prompt("prompts/craft.md");
   const lesson = prompt("skills/teach/SKILL.md");
   const study = prompt("skills/study/SKILL.md");
-  const reading = registerStudy(pi, config, notebook);
+  const reading = registerStudy(shared, config, notebook);
 
   pi.registerCommand("lesson", {
     description: "Open the rendered Org log and begin or continue teaching toward a goal",

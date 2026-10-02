@@ -6,9 +6,13 @@
   "author": "Vincenzo Pace",
   "license": "SEE LICENSE IN NOTICE.md",
   "repository": { "type": "git", "url": "git+https://github.com/donvini94/omp-learn.git" },
+  "keywords": ["pi-package"],
   "files": ["src", "extensions", "skills", "prompts", "agents", "emacs", "README.md", "NOTICE.md", "LICENSE"],
   "omp": {
     "extensions": ["./src/index.ts"]
+  },
+  "pi": {
+    "extensions": ["./src/pi-index.ts"]
   },
   "scripts": {
     "check": "tsc --noEmit",
@@ -20,12 +24,17 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "@earendil-works/pi-tui": "1.0.0",
     "@oh-my-pi/pi-coding-agent": "18.1.10",
     "@types/bun": "^1.3.0",
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
-    "@oh-my-pi/pi-coding-agent": ">=18.1.10"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "@oh-my-pi/pi-coding-agent": ">=18.1.10",
+    "typebox": "*"
   },
   "engines": {
     "bun": ">=1.3.14"

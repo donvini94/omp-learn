@@ -17,7 +17,8 @@
  * across this process's tool calls.
  */
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+import { Type } from "typebox"
+import type { HarnessApi } from "../../../src/harness"
 import type { LearnConfig } from "../../../src/config.ts"
 import {
   applyEdit,
@@ -59,8 +60,7 @@ async function renderSvg(svgPath: string, outPath: string, workDir: string) {
   return { ok: false as const, res: res.code !== null ? res : magick }
 }
 
-export default function svgToolsExtension(pi: ExtensionAPI, config: LearnConfig) {
-  const Type = pi.typebox.Type
+export default function svgToolsExtension(pi: HarnessApi, config: LearnConfig) {
   // ── write_svg ──────────────────────────────────────────────────────────────
   pi.registerTool({
     name: "write_svg",

@@ -61,8 +61,9 @@ edited. [NOTICE.md](NOTICE.md) lists exactly which files are derived and under w
 
 | Thing | Why | Check |
 |---|---|---|
-| [OMP](https://github.com/oh-my-pi/oh-my-pi) ≥ 18.1.10 | the harness | `omp --version` |
-| [Bun](https://bun.sh) ≥ 1.3.14 | runs the extension | `bun --version` |
+| [OMP](https://github.com/oh-my-pi/oh-my-pi) ≥ 18.1.10 | the OMP harness | `omp --version` |
+| [Pi](https://pi.dev) 1.0.0 with Node.js ≥ 22.19.0 | the Pi harness | `pi --version && node --version` |
+| [Bun](https://bun.sh) ≥ 1.3.14 | runs the OMP extension | `bun --version` |
 | Emacs with a running server | the learning log and Anki writes go through `emacsclient` | `emacsclient --eval t` prints `t` |
 | [Pandoc](https://pandoc.org) | converts the session to Org | `pandoc --version` |
 | [Zellij](https://zellij.dev) | panes for child sessions | `zellij --version` |
@@ -137,6 +138,38 @@ not exist, and nothing else in that file is touched. Optional extra keys: `emacs
 
 **Important:** the teacher only activates when OMP is started *inside the learning directory*. That is where the
 config is found.
+
+### Pi alongside OMP
+
+Pi and OMP load different entries from this same checkout. The teaching skills, craft prompt, agents, Org
+bridge, Anki cards, diagrams, and learning workspace are shared live; only the harness adapters differ. Installing
+Pi does not alter the OMP marketplace installation or its OAuth credentials.
+
+```bash
+pi install ~/code/omp-learn
+pi install git:github.com/HazAT/pi-interactive-subagents@v3.7.2
+```
+
+Install the pinned upstream `ask-user-question` popup and `web-fetch` extension in Pi's global extension
+directory, and configure the existing Exa MCP bridge as `exa`. The researcher uses
+`mcp__exa__web_search_exa` and `web_fetch`; it does not require Google CSE credentials. Link the three personal
+agent files from `~/code/omp-learn/agents/` into `~/.pi/agent/agents/` so HazAT's child sessions load their
+current source. On shells whose startup is slow (notably Nix/direnv), set:
+
+```bash
+export PI_SUBAGENT_SHELL_READY_DELAY_MS=2500
+```
+
+Start Pi inside the same learning directory and run `/lesson-setup`. Pi writes an independent
+`<learningDir>/.pi/learn.json`; OMP continues to use `<learningDir>/.omp/learn.json`. Create the Pi file once
+from the active OMP configuration when both harnesses share a learning directory; never overwrite either file.
+Then use `/lesson`, `/study`, `/quiz` through the lesson flow, `/lesson-context`, `/org-log`, and `/org-unlog`
+exactly as in OMP. Pi's native footer remains in use; its status area shows the active lesson log and study
+document.
+
+Pi subagents always start in the learning directory. HazAT 3.7.2 resumes a child in the pane's directory, so the
+package recovers the lesson workspace from the resumed session's recorded working directory (HazAT exports its path
+as `PI_SUBAGENT_SESSION`). Only child sessions spawned by the current lesson may be resumed.
 
 ## Zellij in five minutes
 

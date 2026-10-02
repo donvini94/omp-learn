@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
+import type { HarnessApi } from "./harness";
+import type { ExtensionContext, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import type { LearnConfig } from "./config";
 import { expandPath } from "./config";
 import { canonicalPath, inside } from "./access";
@@ -27,6 +28,16 @@ const PartialQuiz = z.object({ details: z.object({ options: z.array(Option) }) }
 const QuestionArgs = z.object({ question: z.string(), details: z.string().optional() });
 const AskArgs = z.object({ questions: z.array(z.object({ question: z.string(), options: z.array(z.object({ label: z.string(), description: z.string().nullish() })) })) });
 
+const AskUserQuestionArgs = z.object({ question: z.string(), details: z.string().optional(), options: z.array(z.object({ label: z.string(), description: z.string().nullish() })).optional() });
+
+function askText(input: unknown): string | undefined {
+  const many = AskArgs.safeParse(input);
+  if (many.success) return many.data.questions.map(question => [question.question, question.options.map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`).join("\n")].join("\n\n")).join("\n\n");
+  const one = AskUserQuestionArgs.safeParse(input);
+  if (!one.success) return undefined;
+  return [one.data.question, one.data.details, one.data.options?.map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`).join("\n")].filter(Boolean).join("\n\n");
+}
+
 function textContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -45,7 +56,7 @@ function messageRecord(message: unknown): { id: string; title: string; text: str
   return { id, title: role === "user" ? "Learner" : "Teacher", text };
 }
 
-export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
+export function registerNotebook(pi: HarnessApi, config: LearnConfig, piLifecycle = false) {
   let logFile: string | undefined;
   // Cards from a /study session carry the document's tag alongside the shared
   // one, so a year later a deck can be filtered back to its source.
@@ -113,12 +124,12 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
       const visible = messageRecord(msg);
       if (visible) await record(file, visible.id, visible.title, visible.text);
       if (msg.role === "toolResult" && msg.toolName === "quiz") await quizResult(file, msg.toolCallId, msg.details);
-      if (msg.role === "toolResult" && msg.toolName === "ask") await record(file, `ask-answer-${msg.toolCallId}`, "Learner — response", textContent(msg.content));
+      if (msg.role === "toolResult" && (msg.toolName === "ask" || msg.toolName === "ask_user_question")) await record(file, `ask-answer-${msg.toolCallId}`, "Learner — response", textContent(msg.content));
       if (msg.role === "assistant") {
         for (const part of msg.content) {
-          if (part.type !== "toolCall" || part.name !== "ask") continue;
-          const args = AskArgs.parse(part.arguments);
-          await record(file, `ask-question-${part.id}`, "Question", args.questions.map(q => [q.question, q.options.map((o, i) => `${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}`).join("\n")].join("\n\n")).join("\n\n"));
+          if (part.type !== "toolCall" || (part.name !== "ask" && part.name !== "ask_user_question")) continue;
+          const text = askText(part.arguments);
+          if (text) await record(file, `ask-question-${part.id}`, "Question", text);
         }
       }
     }
@@ -180,8 +191,10 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
   }
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
-  pi.on("session_switch", (_event, ctx) => restore(ctx));
-  pi.on("session_branch", (_event, ctx) => restore(ctx));
+  if (!piLifecycle) {
+    pi.on("session_switch", (_event, ctx) => restore(ctx));
+    pi.on("session_branch", (_event, ctx) => restore(ctx));
+  }
   pi.on("session_tree", (_event, ctx) => restore(ctx));
   pi.on("session_shutdown", async () => { await queue; });
   pi.on("message_end", (event, ctx) => {
@@ -192,9 +205,9 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
   });
   pi.on("tool_call", (event, ctx) => {
     const file = logFile;
-    if (!file || event.toolName !== "ask") return;
-    const args = AskArgs.parse(event.input);
-    return enqueue(ctx, () => record(file, `ask-question-${event.toolCallId}`, "Question", args.questions.map(q => [q.question, q.options.map((o, i) => `${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}`).join("\n")].join("\n\n")).join("\n\n")));
+    if (!file || (event.toolName !== "ask" && event.toolName !== "ask_user_question")) return;
+    const text = askText(event.input);
+    if (text) return enqueue(ctx, () => record(file, `ask-question-${event.toolCallId}`, "Question", text));
   });
   pi.on("tool_execution_update", (event, ctx) => {
     const file = logFile;
@@ -208,7 +221,7 @@ export function registerNotebook(pi: ExtensionAPI, config: LearnConfig) {
     const file = logFile;
     if (!file) return;
     if (event.toolName === "quiz") return enqueue(ctx, () => quizResult(file, event.toolCallId, event.details));
-    if (event.toolName === "ask") return enqueue(ctx, () => record(file, `ask-answer-${event.toolCallId}`, "Learner — response", textContent(event.content)));
+    if (event.toolName === "ask" || event.toolName === "ask_user_question") return enqueue(ctx, () => record(file, `ask-answer-${event.toolCallId}`, "Learner — response", textContent(event.content)));
   });
   pi.registerCommand("org-log", {
     description: "Open/replay the current log, or link an existing learning .org file",

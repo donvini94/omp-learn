@@ -1,13 +1,50 @@
-import { getEditorTheme, type ExtensionAPI, type ExtensionContext, type Theme, type ThemeColor } from "@oh-my-pi/pi-coding-agent";
-import {
-	Editor,
-	Key,
-	Text,
-	matchesKey,
-	truncateToWidth,
-	wrapTextWithAnsi,
-} from "@oh-my-pi/pi-tui";
+import type { HarnessApi } from "../src/harness";
+import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { Type } from "typebox";
 
+type QuizTheme = {
+	fg(color: string, text: string): string;
+	bold(text: string): string;
+};
+
+interface QuizEditor {
+	focused: boolean;
+	disableSubmit: boolean;
+	getText(): string;
+	handleInput(data: string): void;
+	invalidate(): void;
+	render(width: number): readonly string[];
+}
+
+interface QuizHarness {
+	Key: Record<string, unknown>;
+	Text: new (text: string, x: number, y: number) => unknown;
+	matchesKey(data: string, key: unknown): boolean;
+	truncateToWidth: (text: string, width: number) => string;
+	wrapTextWithAnsi: (text: string, width: number) => string[];
+	makeEditor(tui: unknown, theme: QuizTheme): QuizEditor;
+}
+
+interface QuizTui {
+	requestRender(): void;
+}
+
+interface QuizComponent {
+	render(width: number): string[];
+	invalidate(): void;
+	handleInput(data: string): void;
+}
+
+interface QuizUi {
+	custom<T>(factory: (tui: QuizTui, theme: QuizTheme, keybindings: unknown, done: (result: T) => void) => QuizComponent): Promise<T>;
+}
+
+interface QuizContext {
+	hasUI: boolean;
+	ui: QuizUi;
+}
+
+let harness: QuizHarness;
 // ────────────────────────────────────────────────────────────────────────────
 // quiz — a graded question alongside OMP's native ask tool.
 //
@@ -179,8 +216,8 @@ function resolveCorrect(
 
 function addWrapped(lines: string[], text: string, width: number, indent = ""): void {
 	const contentWidth = Math.max(1, width - indent.length);
-	for (const line of wrapTextWithAnsi(text, contentWidth)) {
-		lines.push(truncateToWidth(`${indent}${line}`, width));
+	for (const line of harness.wrapTextWithAnsi(text, contentWidth)) {
+		lines.push(harness.truncateToWidth(`${indent}${line}`, width));
 	}
 }
 
@@ -287,7 +324,7 @@ function buildResult(
 // Shared feedback block, rendered after the user submits.
 function renderFeedback(
 	lines: string[],
-	theme: Theme,
+	theme: QuizTheme,
 	width: number,
 	options: QuizOption[],
 	selectedIndices: number[],
@@ -297,7 +334,7 @@ function renderFeedback(
 	note?: string,
 	confidence?: Confidence,
 ): void {
-	const add = (text: string) => lines.push(truncateToWidth(text, width));
+	const add = (text: string) => lines.push(harness.truncateToWidth(text, width));
 	const correct = !dontKnow && isCorrect(selectedIndices, correctIndices);
 	const selectedSet = new Set(selectedIndices);
 	const correctSet = new Set(correctIndices);
@@ -309,7 +346,7 @@ function renderFeedback(
 		const isSelected = selectedSet.has(index);
 		const isKey = correctSet.has(index);
 		let marker: string;
-		let color: ThemeColor;
+		let color: string;
 		if (dontKnow) {
 			// No guess was made — only reveal the correct answer(s); never show ✗.
 			marker = isKey ? "✓" : " ";
@@ -358,8 +395,8 @@ function renderFeedback(
 }
 
 // Top border + question + optional context. Shared by both components.
-function pushHeader(lines: string[], theme: Theme, width: number, question: string, context: string | undefined): void {
-	lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
+function pushHeader(lines: string[], theme: QuizTheme, width: number, question: string, context: string | undefined): void {
+	lines.push(harness.truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
 	addWrapped(lines, theme.fg("text", question), width, " ");
 	if (context) {
 		lines.push("");
@@ -369,17 +406,17 @@ function pushHeader(lines: string[], theme: Theme, width: number, question: stri
 
 // The "I don't know" row in the selection list — visually separated and dimmed
 // so it reads as distinct from the real, gradable options.
-function pushDontKnowRow(lines: string[], theme: Theme, width: number, focused: boolean): void {
+function pushDontKnowRow(lines: string[], theme: QuizTheme, width: number, focused: boolean): void {
 	lines.push("");
 	const prefix = focused ? theme.fg("accent", "> ") : "  ";
 	const styled = focused ? theme.fg("accent", DONT_KNOW_LABEL) : theme.fg("dim", DONT_KNOW_LABEL);
-	lines.push(truncateToWidth(`${prefix}${styled}`, width));
+	lines.push(harness.truncateToWidth(`${prefix}${styled}`, width));
 }
 
 // Persistent, always-present note field rendered under the options during the
 // select phase. Applies to ANY answer (including "I don't know") and is only
 // surfaced to the agent when non-empty.
-function pushNoteField(lines: string[], theme: Theme, width: number, editor: Editor, focused: boolean): void {
+function pushNoteField(lines: string[], theme: QuizTheme, width: number, editor: QuizEditor, focused: boolean): void {
 	lines.push("");
 	const label = focused ? theme.fg("accent", "Note (optional):") : theme.fg("muted", "Note (optional):");
 	addWrapped(lines, label, width, " ");
@@ -391,16 +428,16 @@ function pushNoteField(lines: string[], theme: Theme, width: number, editor: Edi
 // Instead the host intercepts Enter to return focus to the options while
 // keeping the text. Ctrl+J still inserts a newline (pi convention), so
 // multi-line notes work.
-function makeNoteEditor(): Editor {
-	const editor = new Editor(getEditorTheme());
+function makeNoteEditor(tui: QuizTui, theme: QuizTheme): QuizEditor {
+	const editor = harness.makeEditor(tui, theme);
 	editor.focused = false;
 	editor.disableSubmit = true;
 	return editor;
 }
 
 // Confidence step, rendered between answering and the reveal.
-function pushConfidencePrompt(lines: string[], theme: Theme, width: number, answer: string, cursor: number): void {
-	const add = (text: string) => lines.push(truncateToWidth(text, width));
+function pushConfidencePrompt(lines: string[], theme: QuizTheme, width: number, answer: string, cursor: number): void {
+	const add = (text: string) => lines.push(harness.truncateToWidth(text, width));
 	lines.push("");
 	addWrapped(lines, theme.fg("muted", `Your answer: ${answer}`), width, " ");
 	lines.push("");
@@ -423,16 +460,16 @@ type ConfidenceKey =
 
 // Shared key handling for the confidence step; digits 1-3 rate directly.
 function confidenceKey(data: string, cursor: number): ConfidenceKey {
-	if (matchesKey(data, Key.up)) return { kind: "move", cursor: Math.max(0, cursor - 1) };
-	if (matchesKey(data, Key.down)) return { kind: "move", cursor: Math.min(CONFIDENCE_ORDER.length - 1, cursor + 1) };
-	if (matchesKey(data, Key.enter)) return { kind: "rate", confidence: CONFIDENCE_ORDER[cursor] };
-	if (matchesKey(data, Key.escape)) return { kind: "back" };
+	if (harness.matchesKey(data, harness.Key.up)) return { kind: "move", cursor: Math.max(0, cursor - 1) };
+	if (harness.matchesKey(data, harness.Key.down)) return { kind: "move", cursor: Math.min(CONFIDENCE_ORDER.length - 1, cursor + 1) };
+	if (harness.matchesKey(data, harness.Key.enter)) return { kind: "rate", confidence: CONFIDENCE_ORDER[cursor] };
+	if (harness.matchesKey(data, harness.Key.escape)) return { kind: "back" };
 	const direct = /^[1-9]$/.test(data) ? CONFIDENCE_ORDER[Number(data) - 1] : undefined;
 	return direct ? { kind: "rate", confidence: direct } : { kind: "ignore" };
 }
 
 async function askSingleChoice(
-	ctx: ExtensionContext,
+	ctx: ExtensionContext & QuizContext,
 	question: string,
 	context: string | undefined,
 	options: QuizOption[],
@@ -455,7 +492,7 @@ async function askSingleChoice(
 			let dontKnow = false;
 			let confidence: Confidence | undefined;
 			let confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
-			const editor = makeNoteEditor();
+			const editor = makeNoteEditor(tui, theme);
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 
@@ -484,7 +521,7 @@ async function askSingleChoice(
 
 			function handleInput(data: string) {
 				if (phase === "feedback") {
-					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
+					if (harness.matchesKey(data, harness.Key.enter) || harness.matchesKey(data, harness.Key.escape)) {
 						done(response());
 					}
 					return;
@@ -503,7 +540,7 @@ async function askSingleChoice(
 				}
 
 				// Tab toggles focus between the options list and the note field.
-				if (matchesKey(data, Key.tab)) {
+				if (harness.matchesKey(data, harness.Key.tab)) {
 					focus = focus === "options" ? "note" : "options";
 					editor.focused = focus === "note";
 					refresh();
@@ -514,7 +551,7 @@ async function askSingleChoice(
 					// Enter and Esc both return to the options and keep the note text.
 					// (Enter must be intercepted here: the editor's own submit clears
 					// the buffer. Ctrl+J still reaches the editor as a newline.)
-					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
+					if (harness.matchesKey(data, harness.Key.enter) || harness.matchesKey(data, harness.Key.escape)) {
 						toOptions();
 						return;
 					}
@@ -524,17 +561,17 @@ async function askSingleChoice(
 				}
 
 				// focus === "options"
-				if (matchesKey(data, Key.up)) {
+				if (harness.matchesKey(data, harness.Key.up)) {
 					optionIndex = Math.max(0, optionIndex - 1);
 					refresh();
 					return;
 				}
-				if (matchesKey(data, Key.down)) {
+				if (harness.matchesKey(data, harness.Key.down)) {
 					optionIndex = Math.min(dontKnowNav, optionIndex + 1);
 					refresh();
 					return;
 				}
-				if (matchesKey(data, Key.enter)) {
+				if (harness.matchesKey(data, harness.Key.enter)) {
 					if (optionIndex === dontKnowNav) {
 						dontKnow = true;
 						chosen = null;
@@ -549,7 +586,7 @@ async function askSingleChoice(
 					refresh();
 					return;
 				}
-				if (matchesKey(data, Key.escape)) {
+				if (harness.matchesKey(data, harness.Key.escape)) {
 					done(null);
 				}
 			}
@@ -562,7 +599,7 @@ async function askSingleChoice(
 				if (cachedLines && cachedWidth === width) return cachedLines;
 
 				const lines: string[] = [];
-				const add = (text: string) => lines.push(truncateToWidth(text, width));
+				const add = (text: string) => lines.push(harness.truncateToWidth(text, width));
 				pushHeader(lines, theme, width, question, context);
 
 				if (phase === "feedback") {
@@ -637,7 +674,7 @@ async function askSingleChoice(
 }
 
 async function askMultiChoice(
-	ctx: ExtensionContext,
+	ctx: ExtensionContext & QuizContext,
 	question: string,
 	context: string | undefined,
 	options: QuizOption[],
@@ -666,7 +703,7 @@ async function askMultiChoice(
 			let confidence: Confidence | undefined;
 			let confidenceCursor = CONFIDENCE_DEFAULT_CURSOR;
 			let focus: "options" | "note" = "options";
-			const editor = makeNoteEditor();
+			const editor = makeNoteEditor(tui, theme);
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 			const selected = new Map<string, OptionAnswer>();
@@ -732,7 +769,7 @@ async function askMultiChoice(
 
 			function handleInput(data: string) {
 				if (phase === "feedback") {
-					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
+					if (harness.matchesKey(data, harness.Key.enter) || harness.matchesKey(data, harness.Key.escape)) {
 						done(response());
 					}
 					return;
@@ -751,7 +788,7 @@ async function askMultiChoice(
 				}
 
 				// Tab toggles focus between the options list and the note field.
-				if (matchesKey(data, Key.tab)) {
+				if (harness.matchesKey(data, harness.Key.tab)) {
 					focus = focus === "options" ? "note" : "options";
 					editor.focused = focus === "note";
 					refresh();
@@ -762,7 +799,7 @@ async function askMultiChoice(
 					// Enter and Esc both return to the options and keep the note text.
 					// (Enter must be intercepted here: the editor's own submit clears
 					// the buffer. Ctrl+J still reaches the editor as a newline.)
-					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
+					if (harness.matchesKey(data, harness.Key.enter) || harness.matchesKey(data, harness.Key.escape)) {
 						toOptions();
 						return;
 					}
@@ -772,25 +809,25 @@ async function askMultiChoice(
 				}
 
 				// focus === "options"
-				if (matchesKey(data, Key.up)) {
+				if (harness.matchesKey(data, harness.Key.up)) {
 					optionIndex = Math.max(0, optionIndex - 1);
 					refresh();
 					return;
 				}
-				if (matchesKey(data, Key.down)) {
+				if (harness.matchesKey(data, harness.Key.down)) {
 					optionIndex = Math.min(allItems.length - 1, optionIndex + 1);
 					refresh();
 					return;
 				}
 
 				const current = allItems[optionIndex];
-				if (matchesKey(data, Key.space)) {
+				if (harness.matchesKey(data, harness.Key.space)) {
 					if (current.isSubmit) return;
 					toggleOption(current);
 					return;
 				}
 
-				if (matchesKey(data, Key.enter)) {
+				if (harness.matchesKey(data, harness.Key.enter)) {
 					if (current.isSubmit) {
 						submit();
 						return;
@@ -799,7 +836,7 @@ async function askMultiChoice(
 					return;
 				}
 
-				if (matchesKey(data, Key.escape)) {
+				if (harness.matchesKey(data, harness.Key.escape)) {
 					done(null);
 				}
 			}
@@ -812,7 +849,7 @@ async function askMultiChoice(
 				if (cachedLines && cachedWidth === width) return cachedLines;
 
 				const lines: string[] = [];
-				const add = (text: string) => lines.push(truncateToWidth(text, width));
+				const add = (text: string) => lines.push(harness.truncateToWidth(text, width));
 				pushHeader(lines, theme, width, question, context);
 
 				if (phase === "feedback") {
@@ -914,8 +951,8 @@ function sortAnswers(answers: OptionAnswer[]): OptionAnswer[] {
 }
 
 
-export default function quiz(pi: ExtensionAPI) {
-	const Type = pi.typebox.Type;
+export default function quiz(pi: HarnessApi, adapter: QuizHarness) {
+	harness = adapter;
 	// Native ask is exclusive in OMP's tool scheduler. Serialize concurrent
 	// quiz calls here because custom extension tools otherwise run shared.
 	let uiQueue: Promise<void> = Promise.resolve();
@@ -1067,21 +1104,21 @@ export default function quiz(pi: ExtensionAPI) {
 				const noun = options.length === 1 ? "option" : "options";
 				text += theme.fg("dim", ` (${options.length} ${noun})`);
 			}
-			return new Text(text, 0, 0);
+			return new harness.Text(text, 0, 0);
 		},
 
 		renderResult(result, _options, theme) {
 			const details = result.details as QuizResultDetails | undefined;
 			if (!details) {
 				const first = result.content[0];
-				return new Text(first?.type === "text" ? first.text : "", 0, 0);
+				return new harness.Text(first?.type === "text" ? first.text : "", 0, 0);
 			}
 
 			if (details.status === "cancelled") {
-				return new Text(theme.fg("warning", details.message || "Cancelled"), 0, 0);
+				return new harness.Text(theme.fg("warning", details.message || "Cancelled"), 0, 0);
 			}
 			if (details.status === "unavailable") {
-				return new Text(theme.fg("warning", details.message || "quiz unavailable"), 0, 0);
+				return new harness.Text(theme.fg("warning", details.message || "quiz unavailable"), 0, 0);
 			}
 
 			const correctSet = new Set(details.correctIndices);
@@ -1137,7 +1174,7 @@ export default function quiz(pi: ExtensionAPI) {
 				lines.push(theme.fg("muted", details.explanation));
 			}
 
-			return new Text(lines.join("\n"), 0, 0);
+			return new harness.Text(lines.join("\n"), 0, 0);
 		},
 	});
 }

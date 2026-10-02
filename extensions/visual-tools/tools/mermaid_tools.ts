@@ -18,7 +18,8 @@
  * process's tool calls.
  */
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+import { Type } from "typebox"
+import type { HarnessApi } from "../../../src/harness"
 import { fileURLToPath } from "node:url"
 import type { LearnConfig } from "../../../src/config.ts"
 import {
@@ -61,8 +62,7 @@ type RenderDetails = { ok: boolean; path: string; filename?: string }
 
 let session: Session | null = null
 
-export default function mermaidToolsExtension(pi: ExtensionAPI, config: LearnConfig) {
-  const Type = pi.typebox.Type
+export default function mermaidToolsExtension(pi: HarnessApi, config: LearnConfig) {
   // ── write_mermaid ──────────────────────────────────────────────────────────
   pi.registerTool({
     name: "write_mermaid",
