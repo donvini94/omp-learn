@@ -40,7 +40,7 @@ Keep the idea intact but trust the maker to compose; if your brief lists more th
 
 ## Invoke
 
-Dispatch the maker with `subagent`. It opens a real OMP session in its own multiplexer pane, so you can watch it work and it never blocks this conversation:
+Dispatch the maker with `subagent`. It opens a native client session in its own multiplexer pane, so you can watch it work and it never blocks this conversation:
 
 ```
 subagent({ name: "Diagram: <topic>", agent: "mermaid-maker", task: "<your minimal, concrete brief>" })
@@ -61,7 +61,7 @@ path: <cwd>/viz/viz-<slug>-<timestamp>.png
 
 If it returns `RESULT: NONE`, it couldn't make a correct picture of the brief — simplify or rethink, or decide the visual isn't worth it. Never hand-author or fake a diagram yourself; correctness depends on the maker's render-and-inspect loop.
 
-If no multiplexer is available, `subagent` fails explicitly rather than falling back. Start OMP inside Zellij (`zellij --session learning`), or render and inspect the picture inline yourself through the same render tools — you must still actually look at the rendered image before presenting it. Skipping that verification step is never acceptable.
+If no multiplexer is available, `subagent` fails explicitly rather than falling back. Start the client inside Zellij (`zellij --session learning`), or render and inspect the picture inline yourself through the same render tools — you must still actually look at the rendered image before presenting it. Skipping that verification step is never acceptable.
 
 ## Embed it in the lesson
 

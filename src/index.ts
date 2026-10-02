@@ -91,7 +91,7 @@ export default function learning(pi: ExtensionAPI): void {
   });
   pi.on("before_agent_start", event => {
     if (!notebook.getLogFile()) return;
-    return { systemPrompt: [...event.systemPrompt, craft, reading.active() ? study : lesson] };
+    return { systemPrompt: [...event.systemPrompt, craft, reading.active() ? study : lesson, "Use OMP's `ask` for preferences and decisions, with one entry in its `questions` array per call. Use `quiz` only for graded questions."] };
   });
   pi.on("tool_call", (event, ctx) => {
     if (event.toolName === "quiz" && !notebook.getLogFile()) {

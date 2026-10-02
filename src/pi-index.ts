@@ -34,16 +34,12 @@ function learningPolicy(config: { learningDir: string }, files: Iterable<string>
 }
 
 function syncPiResearcher(config: { learningDir: string }): void {
-  const source = fileURLToPath(new URL("../agents/researcher.md", import.meta.url));
+  const source = fileURLToPath(new URL("../pi/agents/researcher.md", import.meta.url));
   const directory = join(config.learningDir, ".pi", "agents");
   const destination = join(directory, "researcher.md");
   const previous = existsSync(destination) ? readFileSync(destination, "utf8") : undefined;
   if (previous && !previous.includes("pi-adapter: omp-learn")) return;
-  const output = readFileSync(source, "utf8")
-    .replace(/^---\n/, "---\npi-adapter: omp-learn\n")
-    .replace("tools: web_search, read", "tools: mcp__exa__web_search_exa, web_fetch, read")
-    .replaceAll("`web_search`", "`mcp__exa__web_search_exa`")
-    .replaceAll("use `read` to get full page content", "use `web_fetch` to get full page content");
+  const output = readFileSync(source, "utf8");
   if (previous === output) return;
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   writeFileSync(destination, output, { mode: 0o600 });
@@ -169,7 +165,7 @@ export default function piLearning(pi: ExtensionAPI): void {
     childSessions.add(event.details.sessionFile);
     pi.appendEntry(SUBAGENT_STATE, { sessions: [...childSessions] });
   });
-  pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${learningPolicy(config, access.files)}\n\nPi harness mapping: any occurrence of the OMP tool name \`ask\` in personal teaching skills or prompts means the installed \`ask_user_question\` tool. The researcher may use \`mcp__exa__web_search_exa\` and \`web_fetch\` for web evidence when available; those network tools remain allowed while local file access stays confined by this policy.` }));
+  pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${learningPolicy(config, access.files)}\n\nUse Pi's \`ask_user_question\` for preferences and decisions, with one question per call. Use \`quiz\` only for graded questions. The researcher may use \`mcp__exa__web_search_exa\` and \`web_fetch\` for web evidence when available; those network tools remain allowed while local file access stays confined by this policy.` }));
 
   // Both harnesses implement this slice; their full ExtensionAPI types are not mutually assignable.
   const shared = pi as unknown as HarnessApi;

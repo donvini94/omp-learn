@@ -1,13 +1,13 @@
 {
   "name": "omp-learn-org",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "OMP teaching, verified diagrams, Org-roam learning logs, and Anki recall cards",
   "type": "module",
   "author": "Vincenzo Pace",
   "license": "SEE LICENSE IN NOTICE.md",
   "repository": { "type": "git", "url": "git+https://github.com/donvini94/omp-learn.git" },
   "keywords": ["pi-package"],
-  "files": ["src", "extensions", "skills", "prompts", "agents", "emacs", "README.md", "NOTICE.md", "LICENSE"],
+  "files": ["src", "extensions", "skills", "prompts", "agents", "pi", "emacs", "README.md", "NOTICE.md", "LICENSE"],
   "omp": {
     "extensions": ["./src/index.ts"]
   },

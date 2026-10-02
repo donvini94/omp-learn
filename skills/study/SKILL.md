@@ -43,7 +43,7 @@ is about to start segment 4.
 ## Phase A — Orientation
 
 **1. Secure the source.** A local file has already been copied to `snapshot`; read it there, never
-at its original path. For a URL, `read` it and write the extracted text to the `snapshot` path
+at its original path. For a URL, fetch it with the client's web tool and write the extracted text to the `snapshot` path
 before doing anything else. Everything afterwards cites the snapshot, so a page that changes or
 disappears cannot change the lesson underneath him. Note the total line count — it is the unit both
 of you will use for locators.
@@ -69,7 +69,7 @@ comprehension — vocabulary, notation, the shape of the argument — never cont
 title and a line-range locator into the snapshot. Write it to the state file and show it to him.
 This map is the coordinate system for everything that follows.
 
-**6. Agree the contract.** Ask for his goal and depth with `ask` — this is a genuine fork with no
+**6. Agree the contract.** Ask for his goal and depth with the client's question tool — this is a genuine fork with no
 right answer, so it never goes through `quiz`. Accept a free-form goal ("enough to argue this in a
 vendor call") and translate it into one of the three modes, then echo the translation back in one
 sentence, including the close-out he will do at the end, so he can correct it before anything is
