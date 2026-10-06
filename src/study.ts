@@ -46,7 +46,11 @@ export type StudyMeta = z.infer<typeof StudyMeta>;
 export type Source = { source: string; kind: "url" | "file" };
 
 export function resolveSource(raw: string, cwd: string): Source {
-  const value = raw.trim();
+  let value = raw.trim();
+  if (value.startsWith("@")) value = value.slice(1);
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1);
+  }
   if (/^https?:\/\//i.test(value)) return { source: new URL(value).toString(), kind: "url" };
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) throw new Error("A study source is an http(s) URL or a local file");
   const path = canonicalPath(expandPath(value, cwd));

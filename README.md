@@ -251,8 +251,12 @@ whitepaper, a textbook chapter, a long article:
 
 ```
 /study ~/papers/tls13.pdf
+/study @"~/papers/Attention Is All You Need.pdf"
 /study https://example.com/some/very/long/post
 ```
+
+Local paths accept an optional `@` file-reference marker and matching single or double quotes.
+Spaces inside the path are preserved.
 
 The source is copied — or, for a URL, extracted — into `<learningDir>/sources/`, so it stays
 readable on later days and cannot change underneath a half-finished read. Then:

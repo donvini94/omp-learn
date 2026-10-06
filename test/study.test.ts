@@ -31,6 +31,15 @@ test("a source resolves to a URL or an existing local file, and nothing else", (
   expect(() => resolveSource(root, root)).toThrow(Error);
 });
 
+test("quoted paths and file references resolve the same document without losing spaces", () => {
+  const name = "Blueprint Alliance Whitepaper-Sep18-Final.pdf";
+  const path = join(root, name);
+  writeFileSync(path, "%PDF");
+  for (const input of [name, path, `"${path}"`, `'${path}'`, `@${path}`, `@"${path}"`, `@'${path}'`, `@"${name}"`]) {
+    expect(resolveSource(input, root)).toEqual({ source: path, kind: "file" });
+  }
+});
+
 test("slugs stay filesystem-safe and survive a URL with no useful tail", () => {
   expect(sourceSlug({ source: "https://www.example.com/papers/TLS 1.3!.pdf", kind: "url" })).toBe("example-com-tls-1-3");
   expect(sourceSlug({ source: "https://example.com/", kind: "url" })).toBe("example-com");
