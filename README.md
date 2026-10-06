@@ -257,6 +257,8 @@ whitepaper, a textbook chapter, a long article:
 
 Local paths accept an optional `@` file-reference marker and matching single or double quotes.
 Spaces inside the path are preserved.
+`/study` opens or reattaches the document's log and automatically starts the teacher's first
+turn; studying the same source again starts a resume turn using the saved progress.
 
 The source is copied — or, for a URL, extracted — into `<learningDir>/sources/`, so it stays
 readable on later days and cannot change underneath a half-finished read. Then:

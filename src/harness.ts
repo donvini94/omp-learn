@@ -23,4 +23,5 @@ export interface HarnessApi {
   registerCommand(name: string, options: { description?: string; handler(args: string, ctx: any): unknown }): unknown;
   registerTool(tool: HarnessTool): unknown;
   appendEntry(customType: string, data?: unknown): unknown;
+  sendUserMessage(content: string): void;
 }

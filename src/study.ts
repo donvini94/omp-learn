@@ -210,6 +210,7 @@ export function registerStudy(pi: HarnessApi, config: LearnConfig, notebook: Not
         pi.appendEntry(STATE, { meta: file });
         notebook.setTag(ankiTag(meta.slug));
         ctx.ui.setStatus("omp-learn-study", `Study: ${meta.slug}`);
+        pi.sendUserMessage(kickoff(meta, file, resuming));
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
